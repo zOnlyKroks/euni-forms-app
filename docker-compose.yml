@@ -1,0 +1,43 @@
+version: "3.9"
+services:
+  mariadb:
+    image: mariadb
+    volumes:
+     - mysql-data:/var/lib/mysql
+     - ./mysql/conf.d:/etc/mysql/conf.d
+     - ./mysql/initdb.d:/docker-entrypoint-initdb.d
+    environment:
+      - MYSQL_ROOT_PASSWORD=${AA_DB_ROOT_PASSWORD}
+    networks:
+      - int
+  redis:
+    image: redis:alpine
+    volumes:
+      - redis-data:/data
+    networks:
+      - int
+  auth:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./conf/local.py:/app/myauth/myauth/settings/local.py
+      # Map any projects you wish to live edit as volumes here
+      # - ./aa-euni-core:/app/aa-euni-core
+      - ./apps:/app/dev
+    env_file:
+      - ./.env
+    ports:
+      - 8000:8000
+    networks:
+      - int
+    depends_on:
+      - mariadb
+      - redis
+
+networks:
+  int:
+
+volumes:
+  redis-data:
+  mysql-data:
