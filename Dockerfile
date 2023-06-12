@@ -39,7 +39,7 @@ RUN git clone -b "${AA_GIT_BRANCH}" -- "${AA_GIT}"
 # Install each pip package you need here that you aren't actively developing
 RUN pip install allianceauth
 
-# RUN pip install aa-euni-core
+RUN pip install aa-euni-core
 
 # Copy any local dev projects into the container
 COPY --chown=euni-aa-dev:euni-aa-dev apps /app/dev
@@ -49,8 +49,6 @@ COPY --chown=euni-aa-dev:euni-aa-dev apps /app/dev
 # RUN pip install -e dev/aa-euni-core
 # You may need to use compat mode to make allianceauth editable:
 # RUN pip install -e dev/allianceauth --config-settings editable_mode=compat
-
-RUN pip install -e dev/aa-euni-core
 
 RUN allianceauth start myauth
 
