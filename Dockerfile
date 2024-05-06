@@ -34,8 +34,11 @@ RUN pip install --upgrade pip
 RUN pip install wheel tox
 RUN git clone -b "${AA_GIT_BRANCH}" -- "${AA_GIT}"
 
+# Switch these if developing allianceauth directly
+RUN pip install ./allianceauth
+# RUN pip install -e dev/allianceauth --config-settings editable_mode=compat
+
 # Install each pip package you need here that you aren't actively developing
-RUN pip install allianceauth
 
 RUN pip install aa-euni-core
 
@@ -46,7 +49,7 @@ COPY --chown=euni-aa-dev:euni-aa-dev apps /app/dev
 # For example:
 # RUN pip install -e dev/aa-euni-core
 # You may need to use compat mode to make allianceauth editable:
-# RUN pip install -e dev/allianceauth --config-settings editable_mode=compat
+
 
 RUN allianceauth start myauth
 

@@ -101,3 +101,15 @@ celery -A myauth worker -l info -B
 This will run Celery in the foreground. Just Ctrl-C or close the terminal whenever you are done running it.
 
 **Note that code changes that run within the Celery process will not take effect until Celery is restarted.**
+
+### Building with a specific AA version
+You can build the auth image against a specific AA version provided that none of your apps have a requirement for AA >= 4. This project currently doesn't enforce dependencies to prevent another app from upgrading AA above your desired version.
+
+**From the host v3.8.1 example:**
+
+```bash
+docker compose build --build-arg AA_GIT_BRANCH="v3.8.1"
+docker compose up -d
+```
+
+You can put any valid branch/tag as an argument to AA_GIT_BRANCH, and you can also change the targeted public repo with AA_GIT.
