@@ -60,10 +60,6 @@ The above command shouldn't raise an exception and should just exist after print
 
 3. Refresh your browser and you should now be super-user.
 
-## Notes
-
-General notes and important points
-
 ### Development
 
 Packages baked into the images are split into installed but not editable and editable. Make sure you put the project(s) you're actively developing with this env into the editable section of the Dockerfile with their paths under `apps/`.
@@ -71,6 +67,10 @@ Packages baked into the images are split into installed but not editable and edi
 The default compose config will automatically bind mount the `apps/` directory to `/app/dev/` inside the container. Coupled with a proper editable install for each project in under `apps/` the Django `runserver` command will automatically restart as you save files in your editor.
 
 Check the Dockerfile comments for more info and example usage.
+
+## Notes
+
+General notes and important points
 
 ### Database
 If you re-generate the env or otherwise modify `mysql/initdb.d/*` the MariaDB container will not re-run the init scripts unless the database volume is deleted.
