@@ -34,6 +34,10 @@ DEFAULT_ENV = {
     "ESI_USER_CONTACT_EMAIL": "",
 }
 
+PROJECT_ROOT = (
+    os.path.normpath(os.path.dirname(os.path.realpath(__file__)) + "/../") + "/"
+)
+
 DOTENV_SOURCE = ".env.example"
 DOTENV_DEST = ".env"
 
@@ -477,20 +481,20 @@ def _validate_env(env):
 def _write_env(env, overwrite=False):
     # Check to see if the environment is already setup if force=False
     if not overwrite:
-        if os.path.exists(DOTENV_DEST):
+        if os.path.exists(PROJECT_ROOT + DOTENV_DEST):
             print(
                 "The .env file already exists in your environment. Please delete it or use --overwrite flag to overwrite."
             )
             exit()
-        if os.path.exists(INIT_SQL_DEST):
+        if os.path.exists(PROJECT_ROOT + INIT_SQL_DEST):
             print(
                 "The mysql/initdb.d/init.sql file already exists in you're environment. Please delete it or use --overwrite flag to overwrite."
             )
             exit()
 
     # Write out .env
-    with open(DOTENV_SOURCE, "r", encoding="utf8-") as in_file, open(
-        DOTENV_DEST, "w", encoding="utf8-"
+    with open(PROJECT_ROOT + DOTENV_SOURCE, "r", encoding="utf-8") as in_file, open(
+        PROJECT_ROOT + DOTENV_DEST, "w", encoding="utf-8"
     ) as out_file:
         content = in_file.read()
 
@@ -521,8 +525,8 @@ def _write_env(env, overwrite=False):
         out_file.write(content)
 
     # Write out init.sql
-    with open(INIT_SQL_SOURCE, "r", encoding="utf8-") as in_file, open(
-        INIT_SQL_DEST, "w", encoding="utf8-"
+    with open(PROJECT_ROOT + INIT_SQL_SOURCE, "r", encoding="utf-8") as in_file, open(
+        PROJECT_ROOT + INIT_SQL_DEST, "w", encoding="utf-8"
     ) as out_file:
         content = in_file.read()
 
