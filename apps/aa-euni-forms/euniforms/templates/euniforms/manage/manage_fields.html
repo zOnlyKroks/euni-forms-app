@@ -1,0 +1,56 @@
+{% extends "euniforms/base.html" %}
+{% load i18n %}
+
+{% block euniforms_content %}
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h1 class="mb-0">{{ form_obj.title }}</h1>
+            <span class="text-muted">{% translate "Questions" %}</span>
+        </div>
+        <div>
+            <a href="{% url 'euniforms:form_edit' form_obj.pk %}" class="btn btn-sm btn-outline-secondary">
+                <i class="fas fa-gear fa-fw"></i> {% translate "Form settings" %}
+            </a>
+            <a href="{% url 'euniforms:field_create' form_obj.pk %}" class="btn btn-sm btn-primary">
+                <i class="fas fa-plus fa-fw"></i> {% translate "Add question" %}
+            </a>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            {% if fields %}
+                <ol class="list-group list-group-numbered">
+                    {% for field in fields %}
+                        <li class="list-group-item d-flex justify-content-between align-items-start">
+                            <div class="ms-2 me-auto">
+                                <div class="fw-bold">
+                                    {{ field.label }}{% if field.required %} <span class="text-danger">*</span>{% endif %}
+                                </div>
+                                <div class="small text-muted">
+                                    {{ field.get_field_type_display }}{% if field.is_choice_type %}: {% for choice in field.choices.all %}{{ choice.value }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}
+                                </div>
+                            </div>
+                            <div class="btn-group btn-group-sm">
+                                <a href="{% url 'euniforms:field_move' field.pk 'up' %}" class="btn btn-outline-secondary" title="{% translate 'Move up' %}"><i class="fas fa-arrow-up fa-fw"></i></a>
+                                <a href="{% url 'euniforms:field_move' field.pk 'down' %}" class="btn btn-outline-secondary" title="{% translate 'Move down' %}"><i class="fas fa-arrow-down fa-fw"></i></a>
+                                <a href="{% url 'euniforms:field_edit' field.pk %}" class="btn btn-outline-secondary" title="{% translate 'Edit' %}"><i class="fas fa-pen fa-fw"></i></a>
+                                <a href="{% url 'euniforms:field_delete' field.pk %}" class="btn btn-outline-danger" title="{% translate 'Delete' %}"
+                                   onclick="event.preventDefault(); if (confirm('{% translate "Remove this question?" %}')) { this.nextElementSibling.submit(); }"><i class="fas fa-trash fa-fw"></i></a>
+                                <form method="post" action="{% url 'euniforms:field_delete' field.pk %}" class="d-none">{% csrf_token %}</form>
+                            </div>
+                        </li>
+                    {% endfor %}
+                </ol>
+            {% else %}
+                <p class="text-muted mb-0">{% translate "No questions yet. Add your first question." %}</p>
+            {% endif %}
+        </div>
+        <div class="card-footer d-flex justify-content-between">
+            <a href="{% url 'euniforms:index' %}" class="btn btn-outline-secondary btn-sm">{% translate "Done" %}</a>
+            <a href="{% url 'euniforms:form_fill' form_obj.pk %}" class="btn btn-outline-primary btn-sm">
+                <i class="fas fa-eye fa-fw"></i> {% translate "Preview" %}
+            </a>
+        </div>
+    </div>
+{% endblock %}

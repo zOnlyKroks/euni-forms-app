@@ -1,0 +1,11 @@
+{% extends "allianceauth/base-bs5.html" %}
+{% load i18n %}
+
+{% block page_title %}{% translate "Forms" %}{% endblock %}
+{% block header_nav_brand %}{% translate "Forms" %}{% endblock %}
+
+{% block content %}
+    <div class="euniforms">
+        {% block euniforms_content %}{% endblock %}
+    </div>
+{% endblock %}

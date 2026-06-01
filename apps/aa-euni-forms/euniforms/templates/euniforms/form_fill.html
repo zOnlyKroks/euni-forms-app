@@ -1,0 +1,32 @@
+{% extends "euniforms/base.html" %}
+{% load i18n %}
+{% load django_bootstrap5 %}
+
+{% block euniforms_content %}
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="mb-0">{{ form_obj.title }}</h1>
+        <a href="{% url 'euniforms:index' %}" class="btn btn-sm btn-outline-secondary">{% translate "Back" %}</a>
+    </div>
+
+    {% if form_obj.description %}
+        <p class="text-muted">{{ form_obj.description|linebreaksbr }}</p>
+    {% endif %}
+
+    {% if blocked_reason %}
+        <div class="alert alert-info">{{ blocked_reason }}</div>
+    {% else %}
+        <div class="card">
+            <div class="card-body">
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    {% if fill_form.fields %}
+                        {% bootstrap_form fill_form %}
+                        <button type="submit" class="btn btn-primary">{% translate "Submit" %}</button>
+                    {% else %}
+                        <p class="text-muted mb-0">{% translate "This form has no questions yet." %}</p>
+                    {% endif %}
+                </form>
+            </div>
+        </div>
+    {% endif %}
+{% endblock %}

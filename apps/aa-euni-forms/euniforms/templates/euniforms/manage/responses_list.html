@@ -1,0 +1,57 @@
+{% extends "euniforms/base.html" %}
+{% load i18n %}
+
+{% block euniforms_content %}
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h1 class="mb-0">{{ form_obj.title }}</h1>
+            <span class="text-muted">
+                {% blocktranslate count counter=rows|length %}{{ counter }} response{% plural %}{{ counter }} responses{% endblocktranslate %}
+            </span>
+        </div>
+        <div>
+            <a href="{% url 'euniforms:responses_csv' form_obj.pk %}" class="btn btn-sm btn-outline-primary">
+                <i class="fas fa-download fa-fw"></i> {% translate "Export CSV" %}
+            </a>
+            {% if can_manage %}
+                <a href="{% url 'euniforms:manage_fields' form_obj.pk %}" class="btn btn-sm btn-outline-secondary">{% translate "Edit form" %}</a>
+            {% endif %}
+            <a href="{% url 'euniforms:index' %}" class="btn btn-sm btn-outline-secondary">{% translate "Back" %}</a>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            {% if rows %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover align-middle">
+                        <thead>
+                            <tr>
+                                <th class="text-nowrap">{% translate "Submitted" %}</th>
+                                <th class="text-nowrap">{% translate "Submitter" %}</th>
+                                {% for field in fields %}<th>{{ field.label }}</th>{% endfor %}
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in rows %}
+                                <tr>
+                                    <td class="text-nowrap">{{ row.response.submitted_at|date:"Y-m-d H:i" }}</td>
+                                    <td class="text-nowrap">{{ row.response.submitter_display }}</td>
+                                    {% for cell in row.cells %}
+                                        <td>{% if cell %}{{ cell.display_value|truncatechars:60 }}{% endif %}</td>
+                                    {% endfor %}
+                                    <td class="text-end">
+                                        <a href="{% url 'euniforms:response_detail' row.response.pk %}" class="btn btn-sm btn-outline-secondary">{% translate "View" %}</a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-muted mb-0">{% translate "No responses yet." %}</p>
+            {% endif %}
+        </div>
+    </div>
+{% endblock %}

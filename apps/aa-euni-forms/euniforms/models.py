@@ -1,0 +1,250 @@
+"""Data models for the EVE Uni Forms app."""
+
+# Django
+from django.contrib.auth.models import Group, User
+from django.db import models
+from django.utils.translation import gettext_lazy as _
+
+
+class General(models.Model):
+    """Meta-model that only carries the app's permissions (no table of its own)."""
+
+    class Meta:
+        managed = False
+        default_permissions = ()
+        permissions = (
+            ("basic_access", "Can access the Forms app and fill out eligible forms"),
+            (
+                "manage_forms",
+                "Can create, edit and delete forms and view all responses",
+            ),
+        )
+
+
+class Form(models.Model):
+    """A form / survey that members can fill out."""
+
+    class Status(models.TextChoices):
+        DRAFT = "DRAFT", _("Draft")
+        OPEN = "OPEN", _("Open")
+        CLOSED = "CLOSED", _("Closed")
+
+    title = models.CharField(max_length=254)
+    description = models.TextField(
+        blank=True, help_text=_("Shown to people before they fill out the form.")
+    )
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.DRAFT
+    )
+
+    created_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    restricted_groups = models.ManyToManyField(
+        Group,
+        blank=True,
+        related_name="+",
+        help_text=_(
+            "Only members of these groups may fill out the form. "
+            "Leave empty to allow any logged-in user."
+        ),
+    )
+    viewer_groups = models.ManyToManyField(
+        Group,
+        blank=True,
+        related_name="+",
+        help_text=_("Members of these groups may read the responses to this form."),
+    )
+
+    allow_multiple = models.BooleanField(
+        default=False,
+        help_text=_("Allow a person to submit this form more than once."),
+    )
+    notify_on_submit = models.BooleanField(
+        default=True,
+        help_text=_("Send an Auth notification to viewers when a response is submitted."),
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+        default_permissions = ()
+
+    def __str__(self) -> str:
+        return self.title
+
+    @property
+    def accepts_submissions(self) -> bool:
+        """Whether the form is currently accepting responses."""
+        return self.status == self.Status.OPEN
+
+    def is_eligible(self, user) -> bool:
+        """Whether ``user`` is allowed to fill this form (ignoring status).
+
+        Managers may always fill (so they can preview). Otherwise: if the form has
+        no ``restricted_groups`` any authenticated user is eligible, else the user
+        must belong to at least one of the restricted groups.
+        """
+        if not user.is_authenticated:
+            return False
+        if user.has_perm("euniforms.manage_forms"):
+            return True
+        if not self.restricted_groups.exists():
+            return True
+        return self.restricted_groups.filter(
+            pk__in=user.groups.values_list("pk", flat=True)
+        ).exists()
+
+    def user_can_view_responses(self, user) -> bool:
+        """Whether ``user`` may read this form's responses."""
+        if not user.is_authenticated:
+            return False
+        if user.has_perm("euniforms.manage_forms"):
+            return True
+        return self.viewer_groups.filter(
+            pk__in=user.groups.values_list("pk", flat=True)
+        ).exists()
+
+    def has_response_from(self, user) -> bool:
+        """Whether ``user`` has already submitted a response to this form."""
+        if not user.is_authenticated:
+            return False
+        return self.responses.filter(user=user).exists()
+
+    def notification_recipients(self):
+        """Users who should be notified when a response is submitted."""
+        recipients = User.objects.filter(groups__in=self.viewer_groups.all())
+        if self.created_by_id:
+            recipients = recipients | User.objects.filter(pk=self.created_by_id)
+        return recipients.distinct()
+
+
+class FormField(models.Model):
+    """A single question on a :class:`Form`."""
+
+    class FieldType(models.TextChoices):
+        SHORT_TEXT = "SHORT_TEXT", _("Short text")
+        LONG_TEXT = "LONG_TEXT", _("Paragraph text")
+        SINGLE_CHOICE = "SINGLE_CHOICE", _("Single choice")
+        MULTI_CHOICE = "MULTI_CHOICE", _("Multiple choice")
+        NUMBER = "NUMBER", _("Number")
+        DATE = "DATE", _("Date")
+        BOOLEAN = "BOOLEAN", _("Yes / No")
+        EVE_CHARACTER = "EVE_CHARACTER", _("EVE character (verified)")
+
+    form = models.ForeignKey(Form, on_delete=models.CASCADE, related_name="fields")
+    order = models.PositiveIntegerField(default=0)
+    label = models.CharField(max_length=254)
+    help_text = models.CharField(max_length=254, blank=True)
+    field_type = models.CharField(
+        max_length=20, choices=FieldType.choices, default=FieldType.SHORT_TEXT
+    )
+    required = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["order", "pk"]
+        default_permissions = ()
+
+    def __str__(self) -> str:
+        return self.label
+
+    @property
+    def is_choice_type(self) -> bool:
+        return self.field_type in (
+            self.FieldType.SINGLE_CHOICE,
+            self.FieldType.MULTI_CHOICE,
+        )
+
+
+class FieldChoice(models.Model):
+    """A selectable option for a choice-type :class:`FormField`."""
+
+    field = models.ForeignKey(
+        FormField, on_delete=models.CASCADE, related_name="choices"
+    )
+    order = models.PositiveIntegerField(default=0)
+    value = models.CharField(max_length=254)
+
+    class Meta:
+        ordering = ["order", "pk"]
+        default_permissions = ()
+
+    def __str__(self) -> str:
+        return self.value
+
+
+class FormResponse(models.Model):
+    """One submission of a :class:`Form` by a user.
+
+    The submitting user and their main character are snapshotted so the
+    attribution survives the user changing their main or being deleted.
+    """
+
+    form = models.ForeignKey(Form, on_delete=models.CASCADE, related_name="responses")
+    user = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    main_character_id = models.PositiveBigIntegerField(null=True, blank=True)
+    main_character_name = models.CharField(max_length=254, blank=True)
+    submitted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-submitted_at"]
+        default_permissions = ()
+
+    def __str__(self) -> str:
+        return f"{self.form.title} — {self.submitter_display}"
+
+    @property
+    def submitter_display(self) -> str:
+        if self.main_character_name:
+            return self.main_character_name
+        if self.user:
+            return self.user.username
+        return str(_("Unknown"))
+
+
+class FormAnswer(models.Model):
+    """An answer to a single :class:`FormField` within a :class:`FormResponse`.
+
+    The value is stored as JSON so every field type round-trips with full
+    fidelity (lists for multi-choice, an ``{id, name}`` object for the verified
+    character picker, etc.). ``field_label``/``field_type`` are snapshotted so a
+    later edit or deletion of the question doesn't corrupt historical answers.
+    """
+
+    response = models.ForeignKey(
+        FormResponse, on_delete=models.CASCADE, related_name="answers"
+    )
+    field = models.ForeignKey(
+        FormField, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    field_label = models.CharField(max_length=254)
+    field_type = models.CharField(max_length=20)
+    value = models.JSONField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["pk"]
+        default_permissions = ()
+
+    def __str__(self) -> str:
+        return f"{self.field_label}: {self.display_value()}"
+
+    def display_value(self) -> str:
+        """A human-readable rendering of the answer, used by templates and CSV."""
+        value = self.value
+        if value is None or value == "":
+            return ""
+        if self.field_type == FormField.FieldType.BOOLEAN:
+            return str(_("Yes")) if value else str(_("No"))
+        if self.field_type == FormField.FieldType.MULTI_CHOICE:
+            if isinstance(value, (list, tuple)):
+                return ", ".join(str(item) for item in value)
+            return str(value)
+        if self.field_type == FormField.FieldType.EVE_CHARACTER:
+            if isinstance(value, dict):
+                return value.get("character_name", "")
+            return str(value)
+        return str(value)

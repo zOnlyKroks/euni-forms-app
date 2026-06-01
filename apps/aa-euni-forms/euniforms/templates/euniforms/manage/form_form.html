@@ -1,0 +1,44 @@
+{% extends "euniforms/base.html" %}
+{% load i18n %}
+{% load django_bootstrap5 %}
+
+{% block extra_css %}{{ block.super }}
+    <style>
+        .euniforms-group-picker { max-height: 220px; overflow-y: auto; }
+        @media (min-width: 768px) {
+            .euniforms-group-picker { column-count: 2; column-gap: 1.5rem; }
+        }
+        .euniforms-group-picker .form-check { break-inside: avoid; }
+    </style>
+{% endblock %}
+
+{% block euniforms_content %}
+    <h1 class="mb-3">
+        {% if is_create %}{% translate "New form" %}{% else %}{% translate "Form settings" %}{% endif %}
+    </h1>
+    <div class="card">
+        <div class="card-body">
+            <form method="post" novalidate>
+                {% csrf_token %}
+                {% bootstrap_field form.title %}
+                {% bootstrap_field form.description %}
+                {% bootstrap_field form.status %}
+
+                <div class="row">
+                    <div class="col-md-6">
+                        {% include "euniforms/manage/_group_picker.html" with field=form.restricted_groups %}
+                    </div>
+                    <div class="col-md-6">
+                        {% include "euniforms/manage/_group_picker.html" with field=form.viewer_groups %}
+                    </div>
+                </div>
+
+                {% bootstrap_field form.allow_multiple %}
+                {% bootstrap_field form.notify_on_submit %}
+
+                <button type="submit" class="btn btn-primary">{% translate "Save" %}</button>
+                <a href="{% url 'euniforms:index' %}" class="btn btn-outline-secondary">{% translate "Cancel" %}</a>
+            </form>
+        </div>
+    </div>
+{% endblock %}

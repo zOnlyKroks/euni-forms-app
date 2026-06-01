@@ -1,0 +1,53 @@
+[build-system]
+build-backend = "hatchling.build"
+requires = [
+    "hatchling",
+]
+
+[project]
+name = "aa-euni-forms"
+description = "A native forms / surveys app for EVE University's Alliance Auth"
+readme = "README.md"
+keywords = [
+    "allianceauth",
+    "eveonline",
+    "eveuniversity",
+    "forms",
+    "surveys",
+]
+license = { file = "LICENSE" }
+authors = [
+    { name = "EVE University" },
+]
+requires-python = ">=3.10,<3.14"
+classifiers = [
+    "Environment :: Web Environment",
+    "Framework :: Django",
+    "Framework :: Django :: 4.2",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+]
+dynamic = [
+    "version",
+]
+dependencies = [
+    "allianceauth>=4.0.0",
+]
+
+[project.optional-dependencies]
+testing = [
+    "allianceauth-app-utils",
+]
+
+[tool.hatch]
+build.include = [
+    "/euniforms",
+]
+version.path = "euniforms/__init__.py"

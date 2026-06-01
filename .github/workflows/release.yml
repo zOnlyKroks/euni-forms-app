@@ -1,0 +1,97 @@
+name: Release
+
+# Manual-only release workflow. You enter the version; it bumps
+# euniforms/__init__.py, commits that to main, tags v<version>, builds the
+# sdist + wheel, and publishes a GitHub Release with the artifacts attached.
+#
+# NOTE: GitHub only runs workflows in `.github/workflows/` at a repository's
+# root, so this takes effect once `aa-euni-forms` is its own repo.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "New version, e.g. 0.1.1 (no leading 'v')"
+        required: true
+        type: string
+
+permissions:
+  contents: write  # push the version-bump commit + tag and create the release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate version format
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([._-]?(a|b|rc|post|dev)[0-9]+)?$'; then
+            echo "::error::'$VERSION' is not a valid version (expected e.g. 0.1.1)."
+            exit 1
+          fi
+
+      - name: Ensure the tag does not already exist
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
+            echo "::error::Tag v$VERSION already exists. Pick a new version."
+            exit 1
+          fi
+
+      - name: Bump version in euniforms/__init__.py
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          python - <<'PY'
+          import os, pathlib
+          version = os.environ["VERSION"]
+          path = pathlib.Path("euniforms/__init__.py")
+          lines = path.read_text().splitlines()
+          for i, line in enumerate(lines):
+              if line.strip().startswith("__version__"):
+                  lines[i] = f'__version__ = "{version}"'
+                  break
+          else:
+              raise SystemExit("Could not find __version__ in euniforms/__init__.py")
+          path.write_text("\n".join(lines) + "\n")
+          print(f"Bumped __version__ to {version}")
+          PY
+
+      - name: Commit, tag and push
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add euniforms/__init__.py
+          git commit -m "Release v$VERSION"
+          git tag "v$VERSION"
+          git push origin main
+          git push origin "v$VERSION"
+
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install --upgrade build twine
+          python -m build
+          twine check dist/*
+
+      - name: Publish GitHub Release with artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ inputs.version }}"
+          name: "v${{ inputs.version }}"
+          generate_release_notes: true
+          files: dist/*

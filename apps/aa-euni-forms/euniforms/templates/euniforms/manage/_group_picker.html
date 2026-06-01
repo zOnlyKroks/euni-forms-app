@@ -1,0 +1,23 @@
+{% load i18n %}
+{# Renders a CheckboxSelectMultiple group field as a tidy scrollable, multi-column box. #}
+<div class="mb-3">
+    <label class="form-label d-block mb-1">{{ field.label }}</label>
+    {% if field.help_text %}
+        <div class="form-text mt-0 mb-1">{{ field.help_text }}</div>
+    {% endif %}
+    <div class="border rounded p-2 euniforms-group-picker">
+        {% for checkbox in field %}
+            <div class="form-check">
+                {{ checkbox.tag }}
+                <label class="form-check-label" for="{{ checkbox.id_for_label }}">
+                    {{ checkbox.choice_label }}
+                </label>
+            </div>
+        {% empty %}
+            <div class="text-muted small">{% translate "No groups exist yet." %}</div>
+        {% endfor %}
+    </div>
+    {% for error in field.errors %}
+        <div class="text-danger small mt-1">{{ error }}</div>
+    {% endfor %}
+</div>

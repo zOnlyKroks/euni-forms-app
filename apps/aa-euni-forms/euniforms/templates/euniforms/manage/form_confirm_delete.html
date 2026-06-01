@@ -1,0 +1,18 @@
+{% extends "euniforms/base.html" %}
+{% load i18n %}
+
+{% block euniforms_content %}
+    <div class="card border-danger">
+        <div class="card-header bg-danger text-white">{% translate "Delete form" %}</div>
+        <div class="card-body">
+            <p>
+                {% blocktranslate with title=form_obj.title responses_count=form_obj.responses.count %}Are you sure you want to delete "{{ title }}"? This permanently removes the form, its questions and all {{ responses_count }} responses.{% endblocktranslate %}
+            </p>
+            <form method="post">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-danger">{% translate "Delete permanently" %}</button>
+                <a href="{% url 'euniforms:index' %}" class="btn btn-outline-secondary">{% translate "Cancel" %}</a>
+            </form>
+        </div>
+    </div>
+{% endblock %}

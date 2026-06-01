@@ -1,0 +1,113 @@
+{% extends "euniforms/base.html" %}
+{% load i18n %}
+
+{% block euniforms_content %}
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="mb-0">{% translate "Forms" %}</h1>
+        {% if can_manage %}
+            <a href="{% url 'euniforms:form_create' %}" class="btn btn-primary">
+                <i class="fas fa-plus fa-fw"></i> {% translate "New form" %}
+            </a>
+        {% endif %}
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <h2 class="card-title h5 mb-0">{% translate "Forms you can fill out" %}</h2>
+        </div>
+        <div class="card-body">
+            {% if fillable_forms %}
+                <div class="list-group">
+                    {% for form in fillable_forms %}
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="fw-bold">{{ form.title }}</div>
+                                {% if form.description %}
+                                    <div class="text-muted small">{{ form.description }}</div>
+                                {% endif %}
+                            </div>
+                            <div>
+                                {% if form.id in submitted_ids and not form.allow_multiple %}
+                                    <span class="badge bg-secondary">{% translate "Submitted" %}</span>
+                                {% else %}
+                                    <a href="{% url 'euniforms:form_fill' form.pk %}" class="btn btn-sm btn-primary">
+                                        {% if form.id in submitted_ids %}{% translate "Submit again" %}{% else %}{% translate "Fill out" %}{% endif %}
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="text-muted mb-0">{% translate "There are no forms available for you right now." %}</p>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if reviewable_forms %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h2 class="card-title h5 mb-0">{% translate "Responses you can view" %}</h2>
+            </div>
+            <div class="card-body">
+                <div class="list-group">
+                    {% for form in reviewable_forms %}
+                        <a href="{% url 'euniforms:responses_list' form.pk %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                            <span>{{ form.title }}</span>
+                            <span class="badge bg-primary rounded-pill">{{ form.responses.count }}</span>
+                        </a>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+    {% if can_manage %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h2 class="card-title h5 mb-0">{% translate "Manage forms" %}</h2>
+            </div>
+            <div class="card-body">
+                {% if managed_forms %}
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead>
+                                <tr>
+                                    <th>{% translate "Title" %}</th>
+                                    <th>{% translate "Status" %}</th>
+                                    <th>{% translate "Responses" %}</th>
+                                    <th class="text-end">{% translate "Actions" %}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for form in managed_forms %}
+                                    <tr>
+                                        <td>{{ form.title }}</td>
+                                        <td>
+                                            {% if form.status == "OPEN" %}
+                                                <span class="badge bg-success">{{ form.get_status_display }}</span>
+                                            {% elif form.status == "CLOSED" %}
+                                                <span class="badge bg-secondary">{{ form.get_status_display }}</span>
+                                            {% else %}
+                                                <span class="badge bg-warning text-dark">{{ form.get_status_display }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td><a href="{% url 'euniforms:responses_list' form.pk %}">{{ form.responses.count }}</a></td>
+                                        <td class="text-end">
+                                            <a href="{% url 'euniforms:manage_fields' form.pk %}" class="btn btn-sm btn-outline-secondary" title="{% translate 'Questions' %}"><i class="fas fa-list-ol fa-fw"></i></a>
+                                            <a href="{% url 'euniforms:form_edit' form.pk %}" class="btn btn-sm btn-outline-secondary" title="{% translate 'Settings' %}"><i class="fas fa-gear fa-fw"></i></a>
+                                            <a href="{% url 'euniforms:responses_list' form.pk %}" class="btn btn-sm btn-outline-secondary" title="{% translate 'Responses' %}"><i class="fas fa-inbox fa-fw"></i></a>
+                                            <a href="{% url 'euniforms:form_delete' form.pk %}" class="btn btn-sm btn-outline-danger" title="{% translate 'Delete' %}"><i class="fas fa-trash fa-fw"></i></a>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted mb-0">{% translate "No forms yet. Create one to get started." %}</p>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+{% endblock %}
