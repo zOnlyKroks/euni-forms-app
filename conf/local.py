@@ -34,6 +34,7 @@ DEBUG = os.getenv("AA_DEBUG", "True").lower() in [
 # Add any additional apps to this list.
 INSTALLED_APPS += [
     "eunicore",
+    "euniforms",
 ]
 
 # To change the logging level for extensions, uncomment the following line.
@@ -85,6 +86,14 @@ DEFAULT_FROM_EMAIL = os.getenv("AA_EMAIL_DEFAULT_FROM", "")
 #######################################
 # Add any custom settings below here. #
 #######################################
+# EVE University is English-speaking. By default Alliance Auth follows the
+# browser's Accept-Language header (e.g. de-DE) and serves its translated
+# (German) UI strings. Disabling i18n forces every string to its English
+# source, regardless of browser language. To re-enable translations, set
+# USE_I18N = True and choose a per-user language in the Auth profile instead.
+LANGUAGE_CODE = "en"
+USE_I18N = False
+
 BROKER_URL = "redis://redis:6379/0"
 CELERY_RESULT_BACKEND = "redis://redis:6379/0"
 CACHES = {

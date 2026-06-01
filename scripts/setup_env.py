@@ -10,7 +10,7 @@ DEFAULT_ENV = {
     "DOCKER_HOST_UID": os.getuid(),
     "DOCKER_HOST_GID": os.getgid(),
     # Python
-    "PIP_INDEX_URL": "https://pypi.eveuniversity.org",
+    "PIP_EXTRA_INDEX_URL": "https://pypi.eveuniversity.org",
     # Alliance Auth
     "AA_DEBUG": True,
     "AA_SECRET_KEY": "",
@@ -94,11 +94,11 @@ def _parse_args():
     # Python
     python_parser = parser.add_argument_group("Python/PIP")
     python_parser.add_argument(
-        "--pip-index-url",
-        metavar="PIP Index URL",
+        "--pip-extra-index-url",
+        metavar="PIP Extra Index URL",
         type=str,
-        default=DEFAULT_ENV["PIP_INDEX_URL"],
-        help="URL of PyPi index to use",
+        default=DEFAULT_ENV["PIP_EXTRA_INDEX_URL"],
+        help="URL of additional PyPi index to use alongside pypi.org",
     )
 
     # Alliance Auth

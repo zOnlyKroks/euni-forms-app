@@ -2,7 +2,7 @@ FROM python:3.11-bullseye
 
 ARG AA_GIT="https://gitlab.com/allianceauth/allianceauth.git"
 ARG AA_GIT_BRANCH="v4.x"
-ARG PIP_INDEX_URL="https://pypi.eveuniversity.org"
+ARG PIP_EXTRA_INDEX_URL="https://pypi.eveuniversity.org"
 
 # These should be set to the UID/GID of the host user.
 # Otherwise the apps:dev mount will not be writable by the container
@@ -50,6 +50,7 @@ COPY --chown=euni-aa-dev:euni-aa-dev apps /app/dev
 # RUN pip install -e dev/aa-euni-core
 # You may need to use compat mode to make allianceauth editable:
 
+RUN pip install -e dev/aa-euni-forms
 
 RUN allianceauth start myauth
 

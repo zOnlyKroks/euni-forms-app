@@ -2,6 +2,15 @@
 
 This is the base Alliance Auth Development Environment for EVE Uni.
 
+## Apps in development
+
+This environment currently develops **[aa-euni-forms](apps/aa-euni-forms/)** — a
+native forms/surveys plugin for Alliance Auth (see its
+[README](apps/aa-euni-forms/README.md)). It is installed editable from
+`apps/aa-euni-forms` (see the `Dockerfile`) and enabled via the `euniforms` entry
+in `conf/local.py`'s `INSTALLED_APPS`. That app is released from its own
+repository — see its README's *Releasing* section.
+
 ## Requirements
 * Linux based docker host (WSL2, Docker Desktop, Podman Desktop, etc)
 * Host must have python3 available to use the project's host based scripts/tools
