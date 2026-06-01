@@ -1,11 +1,16 @@
 name: Release
 
-# Manual-only release workflow. You enter the version; it bumps
-# euniforms/__init__.py, commits that to main, tags v<version>, builds the
-# sdist + wheel, and publishes a GitHub Release with the artifacts attached.
+# Manual-only release workflow for the aa-euni-forms package, which lives in the
+# apps/aa-euni-forms/ subdirectory of this monorepo. You enter the version; it
+# bumps apps/aa-euni-forms/euniforms/__init__.py, commits that to master, tags
+# v<version>, builds the sdist + wheel, and publishes a GitHub Release with the
+# artifacts attached.
 #
-# NOTE: GitHub only runs workflows in `.github/workflows/` at a repository's
-# root, so this takes effect once `aa-euni-forms` is its own repo.
+# NOTE: GitHub only runs workflows in `.github/workflows/` at the repository
+# root, which is why this file lives there rather than under apps/. All `run`
+# steps default to the apps/aa-euni-forms working directory (see the job's
+# `defaults` block); action steps (checkout, gh-release) run from the repo root,
+# so their paths are written relative to the root.
 
 on:
   workflow_dispatch:
@@ -21,11 +26,14 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/aa-euni-forms
     steps:
-      - name: Check out main
+      - name: Check out master
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: master
           fetch-depth: 0
 
       - name: Set up Python
@@ -79,7 +87,7 @@ jobs:
           git add euniforms/__init__.py
           git commit -m "Release v$VERSION"
           git tag "v$VERSION"
-          git push origin main
+          git push origin master
           git push origin "v$VERSION"
 
       - name: Build sdist and wheel
@@ -94,4 +102,4 @@ jobs:
           tag_name: "v${{ inputs.version }}"
           name: "v${{ inputs.version }}"
           generate_release_notes: true
-          files: dist/*
+          files: apps/aa-euni-forms/dist/*
