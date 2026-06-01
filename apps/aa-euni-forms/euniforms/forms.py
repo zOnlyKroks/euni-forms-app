@@ -24,6 +24,7 @@ class FormModelForm(forms.ModelForm):
         fields = [
             "title",
             "description",
+            "introduction_text",
             "status",
             "restricted_groups",
             "viewer_groups",
@@ -33,6 +34,7 @@ class FormModelForm(forms.ModelForm):
         ]
         widgets = {
             "description": forms.Textarea(attrs={"rows": 3}),
+            "introduction_text": forms.Textarea(attrs={"rows": 4}),
             "restricted_groups": forms.CheckboxSelectMultiple(
                 attrs={"class": "form-check-input"}
             ),

@@ -11,6 +11,32 @@
         {% endif %}
     </div>
 
+    <!-- Search box -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="get" class="row g-2 align-items-center">
+                <div class="col-md-8">
+                    <input type="text" name="search" class="form-control"
+                           placeholder="{% translate 'Search forms by title or description...' %}"
+                           value="{{ search_query }}"
+                           aria-label="{% translate 'Search forms' %}">
+                </div>
+                <div class="col-md-4">
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-outline-primary">
+                            <i class="fas fa-search fa-fw"></i> {% translate "Search" %}
+                        </button>
+                        {% if search_query %}
+                            <a href="{% url 'euniforms:index' %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times fa-fw"></i> {% translate "Clear" %}
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div class="card mb-4">
         <div class="card-header">
             <h2 class="card-title h5 mb-0">{% translate "Forms you can fill out" %}</h2>

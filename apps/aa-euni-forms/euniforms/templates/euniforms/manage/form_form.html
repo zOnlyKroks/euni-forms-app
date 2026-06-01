@@ -2,16 +2,6 @@
 {% load i18n %}
 {% load django_bootstrap5 %}
 
-{% block extra_css %}{{ block.super }}
-    <style>
-        .euniforms-group-picker { max-height: 220px; overflow-y: auto; }
-        @media (min-width: 768px) {
-            .euniforms-group-picker { column-count: 2; column-gap: 1.5rem; }
-        }
-        .euniforms-group-picker .form-check { break-inside: avoid; }
-    </style>
-{% endblock %}
-
 {% block euniforms_content %}
     <h1 class="mb-3">
         {% if is_create %}{% translate "New form" %}{% else %}{% translate "Form settings" %}{% endif %}
@@ -22,6 +12,7 @@
                 {% csrf_token %}
                 {% bootstrap_field form.title %}
                 {% bootstrap_field form.description %}
+                {% bootstrap_field form.introduction_text %}
                 {% bootstrap_field form.status %}
 
                 <div class="row">

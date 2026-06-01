@@ -35,6 +35,10 @@ class Form(models.Model):
     description = models.TextField(
         blank=True, help_text=_("Shown to people before they fill out the form.")
     )
+    introduction_text = models.TextField(
+        blank=True,
+        help_text=_("Additional text shown at the top of the question sheet when filling out the form.")
+    )
     status = models.CharField(
         max_length=10, choices=Status.choices, default=Status.DRAFT
     )

@@ -51,10 +51,19 @@ def index(request):
         raise PermissionDenied
 
     can_manage = user.has_perm("euniforms.manage_forms")
+    search_query = request.GET.get("search", "").strip()
 
     open_forms = Form.objects.filter(status=Form.Status.OPEN).prefetch_related(
         "restricted_groups"
     )
+
+    # Apply search filtering if query exists
+    if search_query:
+        from django.db.models import Q
+        open_forms = open_forms.filter(
+            Q(title__icontains=search_query) | Q(description__icontains=search_query)
+        )
+
     fillable_forms = [form for form in open_forms if form.is_eligible(user)]
     submitted_ids = set(
         FormResponse.objects.filter(
@@ -64,6 +73,13 @@ def index(request):
 
     if can_manage:
         managed_forms = Form.objects.all()
+        # Apply search filtering to managed forms too
+        if search_query:
+            from django.db.models import Q
+            managed_forms = managed_forms.filter(
+                Q(title__icontains=search_query) | Q(description__icontains=search_query)
+            )
+
         reviewable_forms = Form.objects.none()
     else:
         managed_forms = Form.objects.none()
@@ -71,12 +87,20 @@ def index(request):
             viewer_groups__in=user.groups.all()
         ).distinct()
 
+        # Apply search filtering to reviewable forms too
+        if search_query:
+            from django.db.models import Q
+            reviewable_forms = reviewable_forms.filter(
+                Q(title__icontains=search_query) | Q(description__icontains=search_query)
+            )
+
     context = {
         "fillable_forms": fillable_forms,
         "submitted_ids": submitted_ids,
         "can_manage": can_manage,
         "managed_forms": managed_forms,
         "reviewable_forms": reviewable_forms,
+        "search_query": search_query,
     }
     return render(request, "euniforms/index.html", context)
 
@@ -349,11 +373,53 @@ def responses_list(request, form_pk):
     if not form_obj.user_can_view_responses(request.user):
         raise PermissionDenied
 
+    # Get filter parameters
+    search_query = request.GET.get("search", "").strip()
+    submitter_filter = request.GET.get("submitter", "").strip()
+    date_from = request.GET.get("date_from", "").strip()
+    date_to = request.GET.get("date_to", "").strip()
+
     fields = list(form_obj.fields.all())
-    rows = []
     responses = form_obj.responses.select_related("user").prefetch_related("answers")
+
+    # Apply filters
+    if submitter_filter:
+        from django.db.models import Q
+        responses = responses.filter(
+            Q(user__username__icontains=submitter_filter) |
+            Q(main_character_name__icontains=submitter_filter)
+        )
+
+    if date_from:
+        try:
+            from datetime import datetime
+            date_from_obj = datetime.strptime(date_from, "%Y-%m-%d").date()
+            responses = responses.filter(submitted_at__date__gte=date_from_obj)
+        except ValueError:
+            pass  # Invalid date format, ignore filter
+
+    if date_to:
+        try:
+            from datetime import datetime
+            date_to_obj = datetime.strptime(date_to, "%Y-%m-%d").date()
+            responses = responses.filter(submitted_at__date__lte=date_to_obj)
+        except ValueError:
+            pass  # Invalid date format, ignore filter
+
+    # Build response rows and apply content search
+    rows = []
     for response in responses:
         answers_by_field = {a.field_id: a for a in response.answers.all()}
+
+        # If there's a search query, check if it matches any answer content
+        if search_query:
+            matches_content = any(
+                search_query.lower() in (answer.display_value().lower() if answer else "")
+                for answer in answers_by_field.values()
+            )
+            if not matches_content:
+                continue  # Skip this response if search doesn't match
+
         rows.append(
             {
                 "response": response,
@@ -366,6 +432,10 @@ def responses_list(request, form_pk):
         "fields": fields,
         "rows": rows,
         "can_manage": request.user.has_perm("euniforms.manage_forms"),
+        "search_query": search_query,
+        "submitter_filter": submitter_filter,
+        "date_from": date_from,
+        "date_to": date_to,
     }
     return render(request, "euniforms/manage/responses_list.html", context)
 

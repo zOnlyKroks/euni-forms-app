@@ -17,6 +17,13 @@
     {% else %}
         <div class="card">
             <div class="card-body">
+                {% if form_obj.introduction_text %}
+                    <div class="alert alert-info mb-4">
+                        <h5 class="alert-heading h6 mb-2">{% translate "Instructions" %}</h5>
+                        {{ form_obj.introduction_text|linebreaksbr }}
+                    </div>
+                {% endif %}
+
                 <form method="post" novalidate>
                     {% csrf_token %}
                     {% if fill_form.fields %}
