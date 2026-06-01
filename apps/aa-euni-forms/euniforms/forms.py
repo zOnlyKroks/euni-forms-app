@@ -29,6 +29,7 @@ class FormModelForm(forms.ModelForm):
             "viewer_groups",
             "allow_multiple",
             "notify_on_submit",
+            "discord_webhook_url",
         ]
         widgets = {
             "description": forms.Textarea(attrs={"rows": 3}),
@@ -37,6 +38,9 @@ class FormModelForm(forms.ModelForm):
             ),
             "viewer_groups": forms.CheckboxSelectMultiple(
                 attrs={"class": "form-check-input"}
+            ),
+            "discord_webhook_url": forms.URLInput(
+                attrs={"placeholder": "https://discord.com/api/webhooks/..."}
             ),
         }
 

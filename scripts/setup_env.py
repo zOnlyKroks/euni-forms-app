@@ -4,11 +4,23 @@ import argparse
 import os
 import random
 import string
+import platform
+
+# Handle Windows compatibility for Docker Host UID/GID
+def _get_default_uid_gid():
+    if platform.system() == 'Windows':
+        # Use default values for Windows/Docker Desktop
+        return 1000, 1000
+    else:
+        # Use actual UID/GID on Unix-like systems
+        return os.getuid(), os.getgid()
+
+_default_uid, _default_gid = _get_default_uid_gid()
 
 DEFAULT_ENV = {
-    # Docker Host (Does this break on non-linux hosts?)
-    "DOCKER_HOST_UID": os.getuid(),
-    "DOCKER_HOST_GID": os.getgid(),
+    # Docker Host (Windows compatible)
+    "DOCKER_HOST_UID": _default_uid,
+    "DOCKER_HOST_GID": _default_gid,
     # Python
     "PIP_EXTRA_INDEX_URL": "https://pypi.eveuniversity.org",
     # Alliance Auth
@@ -266,20 +278,74 @@ def _parse_args():
     return parser.parse_args()
 
 
+def _read_existing_env():
+    """Read values from existing .env file if it exists"""
+    env_file_path = PROJECT_ROOT + DOTENV_DEST
+    existing_env = {}
+
+    if os.path.exists(env_file_path):
+        try:
+            with open(env_file_path, "r", encoding="utf-8") as env_file:
+                for line in env_file:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        key, value = line.split("=", 1)
+                        key = key.strip()
+                        value = value.strip()
+
+                        # Remove quotes from values
+                        if value.startswith(("'", '"')) and value.endswith(("'", '"')):
+                            value = value[1:-1]
+
+                        # Convert boolean strings to actual booleans
+                        if value.lower() == "true":
+                            value = True
+                        elif value.lower() == "false":
+                            value = False
+                        # Convert numeric strings to integers for known numeric fields
+                        elif key in ["DOCKER_HOST_UID", "DOCKER_HOST_GID", "AA_EMAIL_PORT"]:
+                            try:
+                                value = int(value)
+                            except ValueError:
+                                pass  # Keep as string if conversion fails
+
+                        existing_env[key] = value
+        except Exception as e:
+            print(f"Warning: Could not read existing .env file: {e}")
+
+    return existing_env
+
+
 def _create_env_from_args(args):
     args_env = {}
+
+    # Get the original command line arguments that were actually provided
+    import sys
+    provided_args = set()
+    for arg in sys.argv[1:]:
+        if arg.startswith('--'):
+            # Handle both --flag and --flag=value formats
+            arg_name = arg.split('=')[0][2:].replace('-', '_').upper()
+            provided_args.add(arg_name)
 
     for key, value in vars(args).items():
         if key in ["interactive", "overwrite"]:
             continue
 
-        # Remove excess or only whitespace from strings
-        if isinstance(value, str):
-            value = value.strip()
+        # Only include arguments that were explicitly provided on command line
+        # or if they differ from the default values (meaning they were computed/set)
+        key_upper = key.upper()
+        if key_upper in provided_args or (key_upper in DEFAULT_ENV and value != DEFAULT_ENV[key_upper]):
+            # Remove excess or only whitespace from strings
+            if isinstance(value, str):
+                value = value.strip()
+            args_env[key_upper] = value
 
-        args_env[key.upper()] = value
+    # Start with defaults, then overlay existing .env values, then overlay args
+    existing_env = _read_existing_env()
+    final_env = {**DEFAULT_ENV, **existing_env, **args_env}
 
-    return {**DEFAULT_ENV, **args_env}
+    return final_env
 
 
 def _is_env_default(env, name):
@@ -505,7 +571,7 @@ def _write_env(env, overwrite=False):
             if isinstance(value, int):
                 out_value = str(value)
             elif isinstance(value, bool):
-                out_value = "'" + {str(bool)} + "'"
+                out_value = "'" + str(value) + "'"
             elif isinstance(value, str):
                 # This isn't completely safe... or foolproof, but hey, no externals.
                 # Naturally this likely has issues in Windows environments.

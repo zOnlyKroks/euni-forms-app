@@ -4,6 +4,8 @@
 from django.contrib.auth.models import Group, User
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from django.core.exceptions import ValidationError
+import re
 
 
 class General(models.Model):
@@ -67,6 +69,12 @@ class Form(models.Model):
         default=True,
         help_text=_("Send an Auth notification to viewers when a response is submitted."),
     )
+    discord_webhook_url = models.URLField(
+        blank=True,
+        null=True,
+        max_length=500,
+        help_text=_("Optional Discord webhook URL to send form responses to. Format: https://discord.com/api/webhooks/{id}/{token}"),
+    )
 
     class Meta:
         ordering = ["-created_at"]
@@ -74,6 +82,27 @@ class Form(models.Model):
 
     def __str__(self) -> str:
         return self.title
+
+    def clean(self):
+        """Validate the form fields."""
+        super().clean()
+        if self.discord_webhook_url:
+            self._validate_discord_webhook_url()
+
+    def _validate_discord_webhook_url(self):
+        """Validate that the Discord webhook URL has the correct format."""
+        if not self.discord_webhook_url:
+            return
+
+        # Discord webhook URL pattern: https://discord.com/api/webhooks/{id}/{token}
+        pattern = r'^https://discord\.com/api/webhooks/\d+/[A-Za-z0-9_-]+$'
+        if not re.match(pattern, self.discord_webhook_url):
+            raise ValidationError({
+                'discord_webhook_url': _(
+                    'Invalid Discord webhook URL format. Expected: '
+                    'https://discord.com/api/webhooks/{id}/{token}'
+                )
+            })
 
     @property
     def accepts_submissions(self) -> bool:

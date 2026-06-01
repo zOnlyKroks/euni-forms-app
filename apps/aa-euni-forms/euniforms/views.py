@@ -2,6 +2,7 @@
 
 # Standard Library
 import csv
+import logging
 
 # Django
 from django.contrib import messages
@@ -20,6 +21,9 @@ from allianceauth.notifications import notify
 # AA EVE Uni Forms
 from euniforms.forms import DynamicFillForm, FormFieldModelForm, FormModelForm
 from euniforms.models import Form, FormAnswer, FormField, FormResponse
+from euniforms.services import DiscordWebhookService
+
+logger = logging.getLogger(__name__)
 
 
 def _has_app_access(user) -> bool:
@@ -149,6 +153,8 @@ def _save_response(form_obj, user, main_character, fill_form):
     )
     if form_obj.notify_on_submit:
         _notify_viewers(form_obj, response)
+    if form_obj.discord_webhook_url:
+        _notify_discord(form_obj, response)
     return response
 
 
@@ -163,6 +169,16 @@ def _notify_viewers(form_obj, response):
         recipients = recipients.exclude(pk=response.user_id)
     for recipient in recipients:
         notify.info(recipient, title, message)
+
+
+def _notify_discord(form_obj, response):
+    """Send form response to Discord webhook."""
+    try:
+        DiscordWebhookService.send_form_response(
+            form_obj.discord_webhook_url, form_obj, response
+        )
+    except Exception as e:
+        logger.warning(f"Discord webhook failed for form {form_obj.pk}: {e}")
 
 
 @login_required

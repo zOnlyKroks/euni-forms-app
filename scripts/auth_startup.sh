@@ -1,4 +1,4 @@
-#!/usr/bin/env /bin/sh
+#!/bin/sh
 
 # This script is the command ran by the Auth container
 python3 /app/myauth/manage.py collectstatic --no-input
