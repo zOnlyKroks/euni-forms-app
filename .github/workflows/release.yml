@@ -85,9 +85,13 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add euniforms/__init__.py
-          git commit -m "Release v$VERSION"
+          if git diff --cached --quiet; then
+            echo "__version__ already at $VERSION; nothing to commit, tagging the current commit."
+          else
+            git commit -m "Release v$VERSION"
+            git push origin master
+          fi
           git tag "v$VERSION"
-          git push origin master
           git push origin "v$VERSION"
 
       - name: Build sdist and wheel
