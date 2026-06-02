@@ -40,26 +40,6 @@ class GroupStateMapping(models.Model):
         return f"{self.group.name} → {self.state}"
 
 
-class FormCollaborator(models.Model):
-    """A collaborator who can edit a specific form."""
-
-    form = models.ForeignKey('Form', on_delete=models.CASCADE, related_name="collaborators")
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    added_at = models.DateTimeField(auto_now_add=True)
-    added_by = models.ForeignKey(
-        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
-    )
-
-    class Meta:
-        unique_together = ('form', 'user')
-        ordering = ['added_at']
-        default_permissions = ()
-        indexes = [
-            models.Index(fields=['form', 'user'], name='collaborator_form_user_idx'),
-        ]
-
-    def __str__(self) -> str:
-        return f"{self.user.username} - {self.form.title}"
 
 
 class Form(models.Model):
@@ -167,6 +147,14 @@ class Form(models.Model):
         null=True,
         blank=True,
         help_text=_("Optional: Reset the limit every N days. Leave empty for no reset.")
+    )
+
+    # Collaborator groups (who can edit the form)
+    collaborator_groups = models.ManyToManyField(
+        Group,
+        blank=True,
+        related_name="editable_forms",
+        help_text=_("Members of these groups may edit this form and its questions."),
     )
 
     class Meta:
@@ -324,8 +312,10 @@ class Form(models.Model):
         # Form creator can edit their own form
         if self.created_by_id == user.id:
             return True
-        # Check if user is a collaborator with editor role
-        return self.collaborators.filter(user=user).exists()
+        # Check if user is in any of the collaborator groups
+        return self.collaborator_groups.filter(
+            pk__in=user.groups.values_list("pk", flat=True)
+        ).exists()
 
     def check_submission_limit(self, user) -> tuple[bool, str]:
         """Check if user can submit based on answer limits.

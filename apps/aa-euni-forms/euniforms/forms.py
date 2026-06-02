@@ -40,6 +40,7 @@ class FormModelForm(forms.ModelForm):
             "restrict_by_state",
             "restriction_logic",
             "viewer_groups",
+            "collaborator_groups",
             "answer_limit_type",
             "answer_limit",
             "limit_window_days",
@@ -53,6 +54,9 @@ class FormModelForm(forms.ModelForm):
                 attrs={"class": "form-check-input"}
             ),
             "viewer_groups": forms.CheckboxSelectMultiple(
+                attrs={"class": "form-check-input"}
+            ),
+            "collaborator_groups": forms.CheckboxSelectMultiple(
                 attrs={"class": "form-check-input"}
             ),
             "answer_limit_type": forms.Select(
@@ -73,6 +77,7 @@ class FormModelForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["restricted_groups"].queryset = Group.objects.order_by("name")
         self.fields["viewer_groups"].queryset = Group.objects.order_by("name")
+        self.fields["collaborator_groups"].queryset = Group.objects.order_by("name")
 
         # Dynamically populate state choices based on existing groups
         self.fields['restricted_states'].choices = Form.get_state_choices()

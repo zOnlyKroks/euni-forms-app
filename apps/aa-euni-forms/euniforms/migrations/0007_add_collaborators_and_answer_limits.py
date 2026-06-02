@@ -3,31 +3,26 @@
 from django.conf import settings
 from django.db import migrations, models
 import django.db.models.deletion
-import django.utils.timezone
 
 
 class Migration(migrations.Migration):
 
     dependencies = [
-        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
+        ('auth', '0012_alter_user_first_name_max_length'),
         ('euniforms', '0006_add_free_text_field_type'),
     ]
 
     operations = [
-        # Create FormCollaborator model
-        migrations.CreateModel(
-            name='FormCollaborator',
-            fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('added_at', models.DateTimeField(auto_now_add=True)),
-                ('added_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='+', to=settings.AUTH_USER_MODEL)),
-                ('form', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='collaborators', to='euniforms.form')),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL)),
-            ],
-            options={
-                'ordering': ['added_at'],
-                'default_permissions': (),
-            },
+        # Add collaborator groups field to Form model
+        migrations.AddField(
+            model_name='form',
+            name='collaborator_groups',
+            field=models.ManyToManyField(
+                blank=True,
+                help_text='Members of these groups may edit this form and its questions.',
+                related_name='editable_forms',
+                to='auth.group'
+            ),
         ),
 
         # Add answer limit fields to Form model
@@ -62,15 +57,5 @@ class Migration(migrations.Migration):
                 help_text='Optional: Reset the limit every N days. Leave empty for no reset.',
                 null=True
             ),
-        ),
-
-        # Add unique constraint and indexes for FormCollaborator
-        migrations.AlterUniqueTogether(
-            name='formcollaborator',
-            unique_together={('form', 'user')},
-        ),
-        migrations.AddIndex(
-            model_name='formcollaborator',
-            index=models.Index(fields=['form', 'user'], name='collaborator_form_user_idx'),
         ),
     ]

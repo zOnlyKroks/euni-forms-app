@@ -11,9 +11,6 @@
             <a href="{% url 'euniforms:form_edit' form_obj.pk %}" class="btn btn-sm btn-outline-secondary">
                 <i class="fas fa-gear fa-fw"></i> {% translate "Form settings" %}
             </a>
-            <a href="{% url 'euniforms:collaborators_list' form_obj.pk %}" class="btn btn-sm btn-outline-secondary">
-                <i class="fas fa-users fa-fw"></i> {% translate "Collaborators" %}
-            </a>
             <a href="{% url 'euniforms:field_create' form_obj.pk %}" class="btn btn-sm btn-primary">
                 <i class="fas fa-plus fa-fw"></i> {% translate "Add question" %}
             </a>

@@ -21,7 +21,7 @@ from allianceauth.notifications import notify
 
 # AA EVE Uni Forms
 from euniforms.forms import DynamicFillForm, FormFieldModelForm, FormModelForm
-from euniforms.models import Form, FormAnswer, FormField, FormResponse, FormCollaborator
+from euniforms.models import Form, FormAnswer, FormField, FormResponse
 from euniforms.services import DiscordWebhookService
 from euniforms.logging_utils import app_logger, log_user_action, log_permission_denied
 
@@ -91,10 +91,10 @@ def index(request):
 
         reviewable_forms = Form.objects.none()
     else:
-        # Include forms where user is a collaborator or has viewer rights
+        # Include forms where user is in a collaborator group or has viewer rights
         from django.db.models import Q
         managed_forms = Form.objects.filter(
-            Q(collaborators__user=user)
+            Q(collaborator_groups__in=user.groups.all())
         ).distinct()
         reviewable_forms = Form.objects.filter(
             viewer_groups__in=user.groups.all()
@@ -434,137 +434,6 @@ def field_move(request, field_pk, direction):
             FormField.objects.bulk_update(fields, ["order"])
     return redirect("euniforms:manage_fields", form_pk=form_obj.pk)
 
-
-# ---------------------------------------------------------------------------
-# Collaborator management
-# ---------------------------------------------------------------------------
-
-
-@login_required
-def collaborators_list(request, form_pk):
-    """List and manage collaborators for a form."""
-    form_obj = get_object_or_404(Form, pk=form_pk)
-    if not form_obj.user_can_edit_form(request.user):
-        raise PermissionDenied
-
-    collaborators = form_obj.collaborators.select_related("user").order_by("added_at")
-
-    context = {
-        "form_obj": form_obj,
-        "collaborators": collaborators,
-    }
-    return render(request, "euniforms/manage/collaborators_list.html", context)
-
-
-@login_required
-def collaborator_add(request, form_pk):
-    """Add a new collaborator to a form."""
-    form_obj = get_object_or_404(Form, pk=form_pk)
-    if not form_obj.user_can_edit_form(request.user):
-        raise PermissionDenied
-
-    if request.method == "POST":
-        username = request.POST.get("username", "").strip()
-        if not username:
-            messages.error(request, _("Please enter a username."))
-            return redirect("euniforms:collaborators_list", form_pk=form_obj.pk)
-
-        # Try to find user by username first
-        user = None
-        try:
-            user = User.objects.get(username__iexact=username)
-        except User.DoesNotExist:
-            # If not found by username, try to find by EVE character name
-            # Search through all users' character ownerships
-            for potential_user in User.objects.all():
-                # Check if this user has any characters with the given name
-                try:
-                    # Check user's main character
-                    main_char = _main_character(potential_user)
-                    if main_char and hasattr(main_char, 'character_name'):
-                        if main_char.character_name.lower() == username.lower():
-                            user = potential_user
-                            break
-
-                    # Check user's character ownerships if they exist
-                    if hasattr(potential_user, 'character_ownerships'):
-                        for ownership in potential_user.character_ownerships.all():
-                            if hasattr(ownership, 'character'):
-                                char = ownership.character
-                                if hasattr(char, 'character_name') and char.character_name.lower() == username.lower():
-                                    user = potential_user
-                                    break
-                                # Some systems might use 'name' instead
-                                if hasattr(char, 'name') and char.name.lower() == username.lower():
-                                    user = potential_user
-                                    break
-                        if user:  # Found the user, break out of outer loop
-                            break
-                except (AttributeError, TypeError):
-                    continue  # Skip this user if there's any issue accessing their characters
-
-        if not user:
-            # Add some debugging info for the user
-            debug_info = f"Searched for: {username}. "
-            if User.objects.count() > 0:
-                debug_info += f"Found {User.objects.count()} users total. "
-                # Check if we can find any users with characters
-                users_with_main_chars = 0
-                for u in User.objects.all()[:10]:  # Check first 10 users only
-                    main_char = _main_character(u)
-                    if main_char and hasattr(main_char, 'character_name'):
-                        users_with_main_chars += 1
-                debug_info += f"Sample users with main characters: {users_with_main_chars}/10. "
-
-            messages.error(request, _('User or character "%(username)s" not found. %(debug)s') % {
-                "username": username,
-                "debug": debug_info
-            })
-            return redirect("euniforms:collaborators_list", form_pk=form_obj.pk)
-
-        # Check if user is already a collaborator
-        if form_obj.collaborators.filter(user=user).exists():
-            messages.error(request, _('User "%(username)s" is already a collaborator on this form.') % {"username": username})
-            return redirect("euniforms:collaborators_list", form_pk=form_obj.pk)
-
-        # Check if user is the form creator
-        if form_obj.created_by == user:
-            messages.error(request, _('Cannot add the form creator as a collaborator.'))
-            return redirect("euniforms:collaborators_list", form_pk=form_obj.pk)
-
-        # Create the collaborator
-        FormCollaborator.objects.create(
-            form=form_obj,
-            user=user,
-            added_by=request.user,
-        )
-
-        messages.success(request, _('User "%(username)s" has been added as a collaborator.') % {"username": username})
-        return redirect("euniforms:collaborators_list", form_pk=form_obj.pk)
-
-    return redirect("euniforms:collaborators_list", form_pk=form_obj.pk)
-
-
-@login_required
-def collaborator_remove(request, form_pk, user_id):
-    """Remove a collaborator from a form."""
-    form_obj = get_object_or_404(Form, pk=form_pk)
-    if not form_obj.user_can_edit_form(request.user):
-        raise PermissionDenied
-
-    collaborator = get_object_or_404(FormCollaborator, form=form_obj, user_id=user_id)
-
-    if request.method == "POST":
-        username = collaborator.user.username
-        collaborator.delete()
-        messages.success(request, _('Collaborator "%(username)s" has been removed.') % {"username": username})
-        return redirect("euniforms:collaborators_list", form_pk=form_obj.pk)
-
-    context = {
-        "form_obj": form_obj,
-        "collaborator": collaborator,
-    }
-    return render(request, "euniforms/manage/collaborator_confirm_remove.html", context)
 
 
 # ---------------------------------------------------------------------------
