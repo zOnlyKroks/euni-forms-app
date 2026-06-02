@@ -78,7 +78,7 @@ jobs:
         echo "🧪 Running euniforms tests..."
         docker compose run --rm auth bash -c "
           cd /app/myauth &&
-          python manage.py test euniforms.tests --verbosity=2 --keepdb --parallel
+          python manage.py test euniforms.tests --verbosity=2 --keepdb
         "
 
     - name: Check migrations are up to date

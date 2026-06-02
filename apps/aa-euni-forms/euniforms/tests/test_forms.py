@@ -2,6 +2,7 @@
 
 from django.test import TestCase
 from django.contrib.auth.models import User, Group
+from django import forms
 from unittest.mock import Mock, MagicMock
 from decimal import Decimal
 import datetime
