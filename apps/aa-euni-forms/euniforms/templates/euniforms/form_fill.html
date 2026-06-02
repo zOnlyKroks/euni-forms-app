@@ -15,6 +15,12 @@
     {% if blocked_reason %}
         <div class="alert alert-info">{{ blocked_reason }}</div>
     {% else %}
+        {% if is_draft_preview %}
+            <div class="alert alert-warning mb-3">
+                <i class="fas fa-eye fa-fw"></i> {% translate "Preview Mode: This form is in draft status and not accepting submissions." %}
+            </div>
+        {% endif %}
+
         <div class="card">
             <div class="card-body">
                 {% if form_obj.introduction_text %}
@@ -28,7 +34,13 @@
                     {% csrf_token %}
                     {% if fill_form.fields %}
                         {% bootstrap_form fill_form %}
-                        <button type="submit" class="btn btn-primary">{% translate "Submit" %}</button>
+                        {% if not is_draft_preview %}
+                            <button type="submit" class="btn btn-primary">{% translate "Submit" %}</button>
+                        {% else %}
+                            <button type="button" class="btn btn-secondary" disabled>
+                                <i class="fas fa-eye fa-fw"></i> {% translate "Preview Only" %}
+                            </button>
+                        {% endif %}
                     {% else %}
                         <p class="text-muted mb-0">{% translate "This form has no questions yet." %}</p>
                     {% endif %}

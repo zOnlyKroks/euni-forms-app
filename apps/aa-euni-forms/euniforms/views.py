@@ -119,19 +119,19 @@ def form_fill(request, form_pk):
 
     if not form_obj.is_eligible(user):
         raise PermissionDenied
-    if form_obj.status == Form.Status.DRAFT and not can_manage:
-        raise Http404
 
     already_submitted = form_obj.has_response_from(user)
     blocked_reason = None
-    if not form_obj.accepts_submissions:
+    is_draft_preview = form_obj.status == Form.Status.DRAFT
+
+    if form_obj.status == Form.Status.CLOSED:
         blocked_reason = _("This form is closed and no longer accepting responses.")
     elif already_submitted and not form_obj.allow_multiple:
         blocked_reason = _("You have already submitted a response to this form.")
 
     main_character = _main_character(user)
 
-    if request.method == "POST" and not blocked_reason:
+    if request.method == "POST" and not blocked_reason and not is_draft_preview:
         fill_form = DynamicFillForm(request.POST, form_obj=form_obj, user=user)
         if main_character is None:
             messages.error(
@@ -165,6 +165,7 @@ def form_fill(request, form_pk):
         "fill_form": fill_form,
         "blocked_reason": blocked_reason,
         "can_manage": can_manage,
+        "is_draft_preview": is_draft_preview,
     }
     return render(request, "euniforms/form_fill.html", context)
 

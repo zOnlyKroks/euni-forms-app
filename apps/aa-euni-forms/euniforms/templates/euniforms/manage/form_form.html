@@ -3,44 +3,85 @@
 {% load django_bootstrap5 %}
 
 {% block euniforms_content %}
-    <h1 class="mb-3">
-        {% if is_create %}{% translate "New form" %}{% else %}{% translate "Form settings" %}{% endif %}
-    </h1>
-    <div class="card">
-        <div class="card-body">
-            <form method="post" novalidate>
-                {% csrf_token %}
-                {% bootstrap_field form.title %}
-                {% bootstrap_field form.description %}
-                {% bootstrap_field form.introduction_text %}
-                {% bootstrap_field form.status %}
+<h1 class="mb-3">
+    {% if is_create %}{% translate "New form" %}{% else %}{% translate "Form settings" %}{% endif %}
+</h1>
 
-                <div class="row">
-                    <div class="col-md-6">
-                        {% include "euniforms/manage/_group_picker.html" with field=form.restricted_groups %}
-                    </div>
-                    <div class="col-md-6">
-                        {% include "euniforms/manage/_group_picker.html" with field=form.viewer_groups %}
-                    </div>
+<div class="card">
+    <div class="card-body">
+        <form method="post" novalidate>
+            {% csrf_token %}
+
+            {% bootstrap_field form.title %}
+            {% bootstrap_field form.description %}
+            {% bootstrap_field form.introduction_text %}
+            {% bootstrap_field form.status %}
+
+            <div class="row">
+                <div class="col-md-6">
+                    {% include "euniforms/manage/_group_picker.html" with field=form.restricted_groups %}
                 </div>
+                <div class="col-md-6">
+                    {% include "euniforms/manage/_group_picker.html" with field=form.viewer_groups %}
+                </div>
+            </div>
 
-                <hr class="my-4">
-                <h5 class="mb-3">{% translate "Restriction Settings" %}</h5>
+            <hr class="my-4">
+            <h5 class="mb-3">{% translate "Restriction Settings" %}</h5>
 
+            <div class="mb-3">
                 {% bootstrap_field form.restrict_by_group %}
+            </div>
+
+            <div class="mb-3">
                 {% bootstrap_field form.restrict_by_state %}
-                {% bootstrap_field form.restricted_states %}
+            </div>
+
+            <div class="mb-4">
+                <label class="form-label">{{ form.restricted_states.label }}</label>
+                <div class="form-text mb-2">{{ form.restricted_states.help_text }}</div>
+                <div class="d-flex flex-wrap gap-3">
+                    {% for choice in form.restricted_states %}
+                        <div class="form-check">
+                            {{ choice.tag }}
+                            <label class="form-check-label" for="{{ choice.id_for_label }}">
+                                {{ choice.choice_label }}
+                            </label>
+                        </div>
+                    {% endfor %}
+                </div>
+                {% if form.restricted_states.errors %}
+                    <div class="invalid-feedback d-block">
+                        {{ form.restricted_states.errors }}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="mb-3">
                 {% bootstrap_field form.restriction_logic %}
+            </div>
 
-                <hr class="my-4">
+            <hr class="my-4">
 
+            <div class="mb-3">
                 {% bootstrap_field form.allow_multiple %}
-                {% bootstrap_field form.notify_on_submit %}
-                {% bootstrap_field form.discord_webhook_url %}
+            </div>
 
-                <button type="submit" class="btn btn-primary">{% translate "Save" %}</button>
-                <a href="{% url 'euniforms:index' %}" class="btn btn-outline-secondary">{% translate "Cancel" %}</a>
-            </form>
-        </div>
+            <div class="mb-3">
+                {% bootstrap_field form.notify_on_submit %}
+            </div>
+
+            <div class="mb-3">
+                {% bootstrap_field form.discord_webhook_url %}
+            </div>
+
+            <button type="submit" class="btn btn-primary">
+                {% translate "Save" %}
+            </button>
+            <a href="{% url 'euniforms:index' %}" class="btn btn-outline-secondary">
+                {% translate "Cancel" %}
+            </a>
+        </form>
     </div>
+</div>
 {% endblock %}

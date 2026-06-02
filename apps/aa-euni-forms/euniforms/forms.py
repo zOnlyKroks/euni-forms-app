@@ -178,6 +178,12 @@ class DynamicFillForm(forms.Form):
             return forms.CharField(max_length=1000, **common)
         if question.field_type == FieldType.LONG_TEXT:
             return forms.CharField(widget=forms.Textarea(attrs={"rows": 4}), **common)
+        if question.field_type == FieldType.FREE_TEXT:
+            return forms.CharField(
+                max_length=1000,
+                widget=forms.Textarea(attrs={"rows": 6, "maxlength": "1000"}),
+                **common
+            )
         if question.field_type == FieldType.NUMBER:
             return forms.DecimalField(**common)
         if question.field_type == FieldType.DATE:

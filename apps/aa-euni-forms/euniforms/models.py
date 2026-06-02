@@ -276,6 +276,7 @@ class FormField(models.Model):
     class FieldType(models.TextChoices):
         SHORT_TEXT = "SHORT_TEXT", _("Short text")
         LONG_TEXT = "LONG_TEXT", _("Paragraph text")
+        FREE_TEXT = "FREE_TEXT", _("Free text (up to 1000 characters)")
         SINGLE_CHOICE = "SINGLE_CHOICE", _("Single choice")
         MULTI_CHOICE = "MULTI_CHOICE", _("Multiple choice")
         NUMBER = "NUMBER", _("Number")
