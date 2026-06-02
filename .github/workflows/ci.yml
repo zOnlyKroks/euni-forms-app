@@ -38,13 +38,10 @@ jobs:
       run: |
         docker compose up -d mariadb redis
 
-        # Install mysqladmin in the MariaDB container
-        docker compose exec -T mariadb sh -c "apt-get update && apt-get install -y mariadb-client" || true
-
-        # Wait for MariaDB to be ready
+        # Wait for MariaDB to be ready by checking if we can connect
         echo "Waiting for MariaDB to be ready..."
         for i in {1..60}; do
-          if docker compose exec -T mariadb mysqladmin ping --silent -u root -ptest_password_123; then
+          if docker compose exec -T mariadb mariadb -u root -ptest_password_123 -e "SELECT 1;" >/dev/null 2>&1; then
             echo "✅ MariaDB is ready"
             break
           fi
