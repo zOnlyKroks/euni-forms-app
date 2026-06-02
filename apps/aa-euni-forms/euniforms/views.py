@@ -7,10 +7,11 @@ import logging
 # Django
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
+from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Max
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.text import slugify
 from django.utils.translation import gettext as _
@@ -20,7 +21,7 @@ from allianceauth.notifications import notify
 
 # AA EVE Uni Forms
 from euniforms.forms import DynamicFillForm, FormFieldModelForm, FormModelForm
-from euniforms.models import Form, FormAnswer, FormField, FormResponse
+from euniforms.models import Form, FormAnswer, FormField, FormResponse, FormCollaborator
 from euniforms.services import DiscordWebhookService
 from euniforms.logging_utils import app_logger, log_user_action, log_permission_denied
 
@@ -73,6 +74,12 @@ def index(request):
         ).values_list("form_id", flat=True)
     )
 
+    # Check which forms allow resubmission for this user
+    resubmission_allowed_ids = set()
+    for form in fillable_forms:
+        if form.allows_resubmission(user):
+            resubmission_allowed_ids.add(form.id)
+
     if can_manage:
         managed_forms = Form.objects.all()
         # Apply search filtering to managed forms too
@@ -84,14 +91,20 @@ def index(request):
 
         reviewable_forms = Form.objects.none()
     else:
-        managed_forms = Form.objects.none()
+        # Include forms where user is a collaborator or has viewer rights
+        from django.db.models import Q
+        managed_forms = Form.objects.filter(
+            Q(collaborators__user=user)
+        ).distinct()
         reviewable_forms = Form.objects.filter(
             viewer_groups__in=user.groups.all()
         ).distinct()
 
-        # Apply search filtering to reviewable forms too
+        # Apply search filtering to both managed and reviewable forms
         if search_query:
-            from django.db.models import Q
+            managed_forms = managed_forms.filter(
+                Q(title__icontains=search_query) | Q(description__icontains=search_query)
+            )
             reviewable_forms = reviewable_forms.filter(
                 Q(title__icontains=search_query) | Q(description__icontains=search_query)
             )
@@ -99,6 +112,7 @@ def index(request):
     context = {
         "fillable_forms": fillable_forms,
         "submitted_ids": submitted_ids,
+        "resubmission_allowed_ids": resubmission_allowed_ids,
         "can_manage": can_manage,
         "managed_forms": managed_forms,
         "reviewable_forms": reviewable_forms,
@@ -124,10 +138,13 @@ def form_fill(request, form_pk):
     blocked_reason = None
     is_draft_preview = form_obj.status == Form.Status.DRAFT
 
+    if not can_manage and not is_draft_preview:
+        can_submit, limit_reason = form_obj.check_submission_limit(user)
+        if not can_submit:
+            blocked_reason = limit_reason
+
     if form_obj.status == Form.Status.CLOSED:
         blocked_reason = _("This form is closed and no longer accepting responses.")
-    elif already_submitted and not form_obj.allow_multiple:
-        blocked_reason = _("You have already submitted a response to this form.")
 
     main_character = _main_character(user)
 
@@ -288,9 +305,10 @@ def form_create(request):
 
 
 @login_required
-@permission_required("euniforms.manage_forms", raise_exception=True)
 def form_edit(request, form_pk):
     form_obj = get_object_or_404(Form, pk=form_pk)
+    if not form_obj.user_can_edit_form(request.user):
+        raise PermissionDenied
     if request.method == "POST":
         form = FormModelForm(request.POST, instance=form_obj)
         if form.is_valid():
@@ -307,9 +325,10 @@ def form_edit(request, form_pk):
 
 
 @login_required
-@permission_required("euniforms.manage_forms", raise_exception=True)
 def form_delete(request, form_pk):
     form_obj = get_object_or_404(Form, pk=form_pk)
+    if not form_obj.user_can_edit_form(request.user):
+        raise PermissionDenied
     if request.method == "POST":
         title = form_obj.title
         form_obj.delete()
@@ -321,9 +340,10 @@ def form_delete(request, form_pk):
 
 
 @login_required
-@permission_required("euniforms.manage_forms", raise_exception=True)
 def manage_fields(request, form_pk):
     form_obj = get_object_or_404(Form, pk=form_pk)
+    if not form_obj.user_can_edit_form(request.user):
+        raise PermissionDenied
     fields = form_obj.fields.all().prefetch_related("choices")
     return render(
         request,
@@ -333,9 +353,10 @@ def manage_fields(request, form_pk):
 
 
 @login_required
-@permission_required("euniforms.manage_forms", raise_exception=True)
 def field_create(request, form_pk):
     form_obj = get_object_or_404(Form, pk=form_pk)
+    if not form_obj.user_can_edit_form(request.user):
+        raise PermissionDenied
     if request.method == "POST":
         field_form = FormFieldModelForm(request.POST)
         if field_form.is_valid():
@@ -358,10 +379,11 @@ def field_create(request, form_pk):
 
 
 @login_required
-@permission_required("euniforms.manage_forms", raise_exception=True)
 def field_edit(request, field_pk):
     question = get_object_or_404(FormField, pk=field_pk)
     form_obj = question.form
+    if not form_obj.user_can_edit_form(request.user):
+        raise PermissionDenied
     if request.method == "POST":
         field_form = FormFieldModelForm(request.POST, instance=question)
         if field_form.is_valid():
@@ -384,10 +406,11 @@ def field_edit(request, field_pk):
 
 
 @login_required
-@permission_required("euniforms.manage_forms", raise_exception=True)
 def field_delete(request, field_pk):
     question = get_object_or_404(FormField, pk=field_pk)
     form_obj = question.form
+    if not form_obj.user_can_edit_form(request.user):
+        raise PermissionDenied
     if request.method == "POST":
         question.delete()
         messages.success(request, _("Question removed."))
@@ -395,10 +418,11 @@ def field_delete(request, field_pk):
 
 
 @login_required
-@permission_required("euniforms.manage_forms", raise_exception=True)
 def field_move(request, field_pk, direction):
     question = get_object_or_404(FormField, pk=field_pk)
     form_obj = question.form
+    if not form_obj.user_can_edit_form(request.user):
+        raise PermissionDenied
     fields = list(form_obj.fields.all())
     index = next((i for i, f in enumerate(fields) if f.pk == question.pk), None)
     if index is not None:
@@ -409,6 +433,138 @@ def field_move(request, field_pk, direction):
                 field.order = position
             FormField.objects.bulk_update(fields, ["order"])
     return redirect("euniforms:manage_fields", form_pk=form_obj.pk)
+
+
+# ---------------------------------------------------------------------------
+# Collaborator management
+# ---------------------------------------------------------------------------
+
+
+@login_required
+def collaborators_list(request, form_pk):
+    """List and manage collaborators for a form."""
+    form_obj = get_object_or_404(Form, pk=form_pk)
+    if not form_obj.user_can_edit_form(request.user):
+        raise PermissionDenied
+
+    collaborators = form_obj.collaborators.select_related("user").order_by("added_at")
+
+    context = {
+        "form_obj": form_obj,
+        "collaborators": collaborators,
+    }
+    return render(request, "euniforms/manage/collaborators_list.html", context)
+
+
+@login_required
+def collaborator_add(request, form_pk):
+    """Add a new collaborator to a form."""
+    form_obj = get_object_or_404(Form, pk=form_pk)
+    if not form_obj.user_can_edit_form(request.user):
+        raise PermissionDenied
+
+    if request.method == "POST":
+        username = request.POST.get("username", "").strip()
+        if not username:
+            messages.error(request, _("Please enter a username."))
+            return redirect("euniforms:collaborators_list", form_pk=form_obj.pk)
+
+        # Try to find user by username first
+        user = None
+        try:
+            user = User.objects.get(username__iexact=username)
+        except User.DoesNotExist:
+            # If not found by username, try to find by EVE character name
+            # Search through all users' character ownerships
+            for potential_user in User.objects.all():
+                # Check if this user has any characters with the given name
+                try:
+                    # Check user's main character
+                    main_char = _main_character(potential_user)
+                    if main_char and hasattr(main_char, 'character_name'):
+                        if main_char.character_name.lower() == username.lower():
+                            user = potential_user
+                            break
+
+                    # Check user's character ownerships if they exist
+                    if hasattr(potential_user, 'character_ownerships'):
+                        for ownership in potential_user.character_ownerships.all():
+                            if hasattr(ownership, 'character'):
+                                char = ownership.character
+                                if hasattr(char, 'character_name') and char.character_name.lower() == username.lower():
+                                    user = potential_user
+                                    break
+                                # Some systems might use 'name' instead
+                                if hasattr(char, 'name') and char.name.lower() == username.lower():
+                                    user = potential_user
+                                    break
+                        if user:  # Found the user, break out of outer loop
+                            break
+                except (AttributeError, TypeError):
+                    continue  # Skip this user if there's any issue accessing their characters
+
+        if not user:
+            # Add some debugging info for the user
+            debug_info = f"Searched for: {username}. "
+            if User.objects.count() > 0:
+                debug_info += f"Found {User.objects.count()} users total. "
+                # Check if we can find any users with characters
+                users_with_main_chars = 0
+                for u in User.objects.all()[:10]:  # Check first 10 users only
+                    main_char = _main_character(u)
+                    if main_char and hasattr(main_char, 'character_name'):
+                        users_with_main_chars += 1
+                debug_info += f"Sample users with main characters: {users_with_main_chars}/10. "
+
+            messages.error(request, _('User or character "%(username)s" not found. %(debug)s') % {
+                "username": username,
+                "debug": debug_info
+            })
+            return redirect("euniforms:collaborators_list", form_pk=form_obj.pk)
+
+        # Check if user is already a collaborator
+        if form_obj.collaborators.filter(user=user).exists():
+            messages.error(request, _('User "%(username)s" is already a collaborator on this form.') % {"username": username})
+            return redirect("euniforms:collaborators_list", form_pk=form_obj.pk)
+
+        # Check if user is the form creator
+        if form_obj.created_by == user:
+            messages.error(request, _('Cannot add the form creator as a collaborator.'))
+            return redirect("euniforms:collaborators_list", form_pk=form_obj.pk)
+
+        # Create the collaborator
+        FormCollaborator.objects.create(
+            form=form_obj,
+            user=user,
+            added_by=request.user,
+        )
+
+        messages.success(request, _('User "%(username)s" has been added as a collaborator.') % {"username": username})
+        return redirect("euniforms:collaborators_list", form_pk=form_obj.pk)
+
+    return redirect("euniforms:collaborators_list", form_pk=form_obj.pk)
+
+
+@login_required
+def collaborator_remove(request, form_pk, user_id):
+    """Remove a collaborator from a form."""
+    form_obj = get_object_or_404(Form, pk=form_pk)
+    if not form_obj.user_can_edit_form(request.user):
+        raise PermissionDenied
+
+    collaborator = get_object_or_404(FormCollaborator, form=form_obj, user_id=user_id)
+
+    if request.method == "POST":
+        username = collaborator.user.username
+        collaborator.delete()
+        messages.success(request, _('Collaborator "%(username)s" has been removed.') % {"username": username})
+        return redirect("euniforms:collaborators_list", form_pk=form_obj.pk)
+
+    context = {
+        "form_obj": form_obj,
+        "collaborator": collaborator,
+    }
+    return render(request, "euniforms/manage/collaborator_confirm_remove.html", context)
 
 
 # ---------------------------------------------------------------------------

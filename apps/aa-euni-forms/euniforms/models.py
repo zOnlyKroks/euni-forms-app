@@ -40,6 +40,28 @@ class GroupStateMapping(models.Model):
         return f"{self.group.name} → {self.state}"
 
 
+class FormCollaborator(models.Model):
+    """A collaborator who can edit a specific form."""
+
+    form = models.ForeignKey('Form', on_delete=models.CASCADE, related_name="collaborators")
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    added_at = models.DateTimeField(auto_now_add=True)
+    added_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+
+    class Meta:
+        unique_together = ('form', 'user')
+        ordering = ['added_at']
+        default_permissions = ()
+        indexes = [
+            models.Index(fields=['form', 'user'], name='collaborator_form_user_idx'),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user.username} - {self.form.title}"
+
+
 class Form(models.Model):
     """A form / survey that members can fill out."""
 
@@ -47,6 +69,11 @@ class Form(models.Model):
         DRAFT = "DRAFT", _("Draft")
         OPEN = "OPEN", _("Open")
         CLOSED = "CLOSED", _("Closed")
+
+    class AnswerLimitType(models.TextChoices):
+        UNLIMITED = "UNLIMITED", _("Unlimited submissions")
+        ONCE_PER_ACCOUNT = "ONCE_PER_ACCOUNT", _("Once per account")
+        LIMITED_PER_ACCOUNT = "LIMITED_PER_ACCOUNT", _("Limited submissions per account")
 
     title = models.CharField(max_length=254)
     description = models.TextField(
@@ -122,6 +149,24 @@ class Form(models.Model):
         null=True,
         max_length=500,
         help_text=_("Optional Discord webhook URL to send form responses to. Format: https://discord.com/api/webhooks/{id}/{token}"),
+    )
+
+    # Answer limit fields
+    answer_limit_type = models.CharField(
+        max_length=20,
+        choices=AnswerLimitType.choices,
+        default=AnswerLimitType.ONCE_PER_ACCOUNT,
+        help_text=_("How to limit submissions per account.")
+    )
+    answer_limit = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text=_("Maximum number of submissions per account (only used with 'Limited submissions per account').")
+    )
+    limit_window_days = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text=_("Optional: Reset the limit every N days. Leave empty for no reset.")
     )
 
     class Meta:
@@ -268,6 +313,67 @@ class Form(models.Model):
         if self.created_by_id:
             recipients = recipients | User.objects.filter(pk=self.created_by_id)
         return recipients.distinct()
+
+    def user_can_edit_form(self, user) -> bool:
+        """Whether ``user`` may edit this form and its fields."""
+        if not user.is_authenticated:
+            return False
+        # Global managers can edit any form
+        if user.has_perm("euniforms.manage_forms"):
+            return True
+        # Form creator can edit their own form
+        if self.created_by_id == user.id:
+            return True
+        # Check if user is a collaborator with editor role
+        return self.collaborators.filter(user=user).exists()
+
+    def check_submission_limit(self, user) -> tuple[bool, str]:
+        """Check if user can submit based on answer limits.
+
+        Returns:
+            tuple: (can_submit: bool, reason: str)
+        """
+        if not user.is_authenticated:
+            return False, "User not authenticated"
+
+        if self.answer_limit_type == self.AnswerLimitType.UNLIMITED:
+            return True, "Unlimited submissions allowed"
+
+        if self.answer_limit_type == self.AnswerLimitType.ONCE_PER_ACCOUNT:
+            if self.has_response_from(user):
+                return False, "You have already submitted a response to this form"
+            return True, "First submission allowed"
+
+        if self.answer_limit_type == self.AnswerLimitType.LIMITED_PER_ACCOUNT:
+            if not self.answer_limit or self.answer_limit <= 0:
+                return False, "No submission limit configured"
+
+            # Count existing submissions
+            queryset = self.responses.filter(user=user)
+
+            # Apply time window if configured
+            if self.limit_window_days and self.limit_window_days > 0:
+                from django.utils import timezone
+                from datetime import timedelta
+                cutoff_date = timezone.now() - timedelta(days=self.limit_window_days)
+                queryset = queryset.filter(submitted_at__gte=cutoff_date)
+
+            submission_count = queryset.count()
+
+            if submission_count >= self.answer_limit:
+                if self.limit_window_days:
+                    return False, f"You have reached the limit of {self.answer_limit} submissions within {self.limit_window_days} days"
+                else:
+                    return False, f"You have reached the limit of {self.answer_limit} submissions for this form"
+
+            remaining = self.answer_limit - submission_count
+            return True, f"{remaining} submissions remaining"
+
+        return False, "Unknown submission limit type"
+
+    def allows_resubmission(self, user) -> bool:
+        can_submit, _ = self.check_submission_limit(user)
+        return can_submit
 
 
 class FormField(models.Model):

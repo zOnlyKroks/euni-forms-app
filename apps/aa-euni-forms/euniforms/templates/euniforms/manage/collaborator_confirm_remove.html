@@ -1,0 +1,66 @@
+{% extends "euniforms/base.html" %}
+{% load i18n %}
+
+{% block euniforms_content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="mb-0">{% translate "Remove Collaborator" %}</h1>
+    <a href="{% url 'euniforms:collaborators_list' form_obj.pk %}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left fa-fw"></i> {% translate "Back to collaborators" %}
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="alert alert-warning" role="alert">
+            <i class="fas fa-exclamation-triangle fa-fw"></i>
+            <strong>{% translate "Confirm removal" %}</strong>
+            <p class="mb-0 mt-2">
+                {% blocktrans with username=collaborator.user.username form_title=form_obj.title %}
+                    Are you sure you want to remove <strong>{{ username }}</strong> as a collaborator from "<strong>{{ form_title }}</strong>"?
+                    <br><br>
+                    They will no longer be able to edit this form or its questions.
+                {% endblocktrans %}
+            </p>
+        </div>
+
+        <div class="row">
+            <div class="col-md-8">
+                <table class="table table-sm">
+                    <tbody>
+                        <tr>
+                            <td><strong>{% translate "User:" %}</strong></td>
+                            <td>{{ collaborator.user.username }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>{% translate "Form:" %}</strong></td>
+                            <td>{{ form_obj.title }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>{% translate "Added:" %}</strong></td>
+                            <td>{{ collaborator.added_at|date:'M j, Y' }}</td>
+                        </tr>
+                        {% if collaborator.added_by %}
+                        <tr>
+                            <td><strong>{% translate "Added by:" %}</strong></td>
+                            <td>{{ collaborator.added_by.username }}</td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <form method="post">
+            {% csrf_token %}
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-danger">
+                    <i class="fas fa-trash fa-fw"></i> {% translate "Remove Collaborator" %}
+                </button>
+                <a href="{% url 'euniforms:collaborators_list' form_obj.pk %}" class="btn btn-outline-secondary">
+                    {% translate "Cancel" %}
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

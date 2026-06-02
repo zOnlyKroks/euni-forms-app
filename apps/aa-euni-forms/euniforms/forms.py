@@ -40,7 +40,9 @@ class FormModelForm(forms.ModelForm):
             "restrict_by_state",
             "restriction_logic",
             "viewer_groups",
-            "allow_multiple",
+            "answer_limit_type",
+            "answer_limit",
+            "limit_window_days",
             "notify_on_submit",
             "discord_webhook_url",
         ]
@@ -52,6 +54,15 @@ class FormModelForm(forms.ModelForm):
             ),
             "viewer_groups": forms.CheckboxSelectMultiple(
                 attrs={"class": "form-check-input"}
+            ),
+            "answer_limit_type": forms.Select(
+                attrs={"class": "form-select", "id": "id_answer_limit_type"}
+            ),
+            "answer_limit": forms.NumberInput(
+                attrs={"min": "1", "max": "999", "class": "form-control"}
+            ),
+            "limit_window_days": forms.NumberInput(
+                attrs={"min": "1", "max": "365", "class": "form-control"}
             ),
             "discord_webhook_url": forms.URLInput(
                 attrs={"placeholder": "https://discord.com/api/webhooks/..."}
@@ -69,6 +80,24 @@ class FormModelForm(forms.ModelForm):
         # Pre-populate restricted_states field if form instance exists
         if self.instance.pk and self.instance.restricted_states:
             self.fields['restricted_states'].initial = self.instance.restricted_states
+
+        # Configure answer limit field help text and requirements
+        self.fields['answer_limit_type'].help_text = _("Control how many times each user can submit this form.")
+        self.fields['answer_limit'].help_text = _("Maximum submissions per user (only used with 'Limited submissions per account').")
+        self.fields['limit_window_days'].help_text = _("Optional: Reset the limit every N days. Leave empty for no time limit.")
+
+    def clean(self):
+        """Validate answer limit configuration."""
+        cleaned_data = super().clean()
+        answer_limit_type = cleaned_data.get('answer_limit_type')
+        answer_limit = cleaned_data.get('answer_limit')
+
+        # If LIMITED_PER_ACCOUNT is selected, answer_limit is required
+        if answer_limit_type == Form.AnswerLimitType.LIMITED_PER_ACCOUNT:
+            if not answer_limit or answer_limit <= 0:
+                self.add_error('answer_limit', _('You must specify a valid answer limit when using "Limited submissions per account".'))
+
+        return cleaned_data
 
     def save(self, commit=True):
         """Save the form instance, properly handling the restricted_states JSONField."""

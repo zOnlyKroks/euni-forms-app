@@ -62,10 +62,21 @@
             </div>
 
             <hr class="my-4">
+            <h5 class="mb-3">{% translate "Submission Settings" %}</h5>
 
             <div class="mb-3">
-                {% bootstrap_field form.allow_multiple %}
+                {% bootstrap_field form.answer_limit_type %}
             </div>
+
+            <div class="mb-3">
+                {% bootstrap_field form.answer_limit %}
+            </div>
+
+            <div class="mb-3">
+                {% bootstrap_field form.limit_window_days %}
+            </div>
+
+            <hr class="my-4">
 
             <div class="mb-3">
                 {% bootstrap_field form.notify_on_submit %}
@@ -74,6 +85,37 @@
             <div class="mb-3">
                 {% bootstrap_field form.discord_webhook_url %}
             </div>
+
+            {% if not is_create %}
+                <hr class="my-4">
+                <h5 class="mb-3">{% translate "Collaborators" %}</h5>
+
+                <div class="row">
+                    <div class="col-md-8">
+                        <p class="text-muted mb-3">{% translate "Manage users who can edit this form and its questions." %}</p>
+
+                        {% if form_obj.collaborators.exists %}
+                            <div class="mb-3">
+                                <small class="text-muted">{% translate "Current collaborators:" %}</small>
+                                <div class="d-flex flex-wrap gap-2 mt-1">
+                                    {% for collab in form_obj.collaborators.all %}
+                                        <span class="badge bg-secondary">{{ collab.user.username }}</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        {% else %}
+                            <p class="small text-muted mb-3">{% translate "No collaborators added yet." %}</p>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <a href="{% url 'euniforms:collaborators_list' form_obj.pk %}" class="btn btn-outline-primary w-100">
+                            <i class="fas fa-users fa-fw"></i> {% translate "Manage Collaborators" %}
+                        </a>
+                    </div>
+                </div>
+
+                <hr class="my-4">
+            {% endif %}
 
             <button type="submit" class="btn btn-primary">
                 {% translate "Save" %}

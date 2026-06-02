@@ -26,6 +26,14 @@ urlpatterns = [
         views.field_move,
         name="field_move",
     ),
+    # Collaborators
+    path("manage/<int:form_pk>/collaborators/", views.collaborators_list, name="collaborators_list"),
+    path("manage/<int:form_pk>/collaborators/add/", views.collaborator_add, name="collaborator_add"),
+    path(
+        "manage/<int:form_pk>/collaborators/<int:user_id>/remove/",
+        views.collaborator_remove,
+        name="collaborator_remove",
+    ),
     # Responses
     path("manage/<int:form_pk>/responses/", views.responses_list, name="responses_list"),
     path("manage/<int:form_pk>/responses.csv", views.responses_csv, name="responses_csv"),
