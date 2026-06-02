@@ -4,7 +4,7 @@
 from django.contrib import admin
 
 # AA EVE Uni Forms
-from euniforms.models import FieldChoice, Form, FormAnswer, FormField, FormResponse
+from euniforms.models import FieldChoice, Form, FormAnswer, FormField, FormResponse, GroupStateMapping
 
 
 class FormFieldInline(admin.TabularInline):
@@ -47,3 +47,11 @@ class FormResponseAdmin(admin.ModelAdmin):
     list_filter = ("form",)
     date_hierarchy = "submitted_at"
     inlines = [FormAnswerInline]
+
+
+@admin.register(GroupStateMapping)
+class GroupStateMappingAdmin(admin.ModelAdmin):
+    list_display = ("group", "state")
+    list_filter = ("state",)
+    search_fields = ("group__name", "state")
+    ordering = ("state", "group__name")

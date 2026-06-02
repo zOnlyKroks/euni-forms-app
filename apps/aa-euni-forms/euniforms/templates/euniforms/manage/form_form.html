@@ -24,6 +24,16 @@
                     </div>
                 </div>
 
+                <hr class="my-4">
+                <h5 class="mb-3">{% translate "Restriction Settings" %}</h5>
+
+                {% bootstrap_field form.restrict_by_group %}
+                {% bootstrap_field form.restrict_by_state %}
+                {% bootstrap_field form.restricted_states %}
+                {% bootstrap_field form.restriction_logic %}
+
+                <hr class="my-4">
+
                 {% bootstrap_field form.allow_multiple %}
                 {% bootstrap_field form.notify_on_submit %}
                 {% bootstrap_field form.discord_webhook_url %}

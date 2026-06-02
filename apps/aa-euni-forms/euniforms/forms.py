@@ -19,6 +19,14 @@ BOOLEAN_CHOICES = [("", "---------"), ("yes", _("Yes")), ("no", _("No"))]
 class FormModelForm(forms.ModelForm):
     """Create / edit a form's metadata. Questions are managed on a separate page."""
 
+    # Dynamic field for state selection - choices are set in __init__
+    restricted_states = forms.MultipleChoiceField(
+        choices=[],  # Will be populated dynamically
+        widget=forms.CheckboxSelectMultiple(attrs={"class": "form-check-input"}),
+        required=False,
+        help_text=_("Select which user states can fill this form. States are automatically detected from your existing groups.")
+    )
+
     class Meta:
         model = Form
         fields = [
@@ -27,6 +35,10 @@ class FormModelForm(forms.ModelForm):
             "introduction_text",
             "status",
             "restricted_groups",
+            "restrict_by_group",
+            "restricted_states",
+            "restrict_by_state",
+            "restriction_logic",
             "viewer_groups",
             "allow_multiple",
             "notify_on_submit",
@@ -50,6 +62,26 @@ class FormModelForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["restricted_groups"].queryset = Group.objects.order_by("name")
         self.fields["viewer_groups"].queryset = Group.objects.order_by("name")
+
+        # Dynamically populate state choices based on existing groups
+        self.fields['restricted_states'].choices = Form.get_state_choices()
+
+        # Pre-populate restricted_states field if form instance exists
+        if self.instance.pk and self.instance.restricted_states:
+            self.fields['restricted_states'].initial = self.instance.restricted_states
+
+    def save(self, commit=True):
+        """Save the form instance, properly handling the restricted_states JSONField."""
+        instance = super().save(commit=False)
+
+        # Convert MultipleChoiceField selection to JSON list
+        if 'restricted_states' in self.cleaned_data:
+            instance.restricted_states = list(self.cleaned_data['restricted_states'])
+
+        if commit:
+            instance.save()
+            self.save_m2m()
+        return instance
 
 
 class FormFieldModelForm(forms.ModelForm):

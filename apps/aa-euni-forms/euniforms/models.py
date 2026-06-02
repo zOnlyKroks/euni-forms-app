@@ -23,6 +23,23 @@ class General(models.Model):
         )
 
 
+class GroupStateMapping(models.Model):
+    """Maps groups to user states for form restrictions."""
+
+    group = models.OneToOneField(
+        Group,
+        on_delete=models.CASCADE,
+        related_name='state_mapping'
+    )
+    state = models.CharField(max_length=50)
+
+    class Meta:
+        default_permissions = ()
+
+    def __str__(self) -> str:
+        return f"{self.group.name} → {self.state}"
+
+
 class Form(models.Model):
     """A form / survey that members can fill out."""
 
@@ -63,6 +80,33 @@ class Form(models.Model):
         blank=True,
         related_name="+",
         help_text=_("Members of these groups may read the responses to this form."),
+    )
+
+    # State-based restrictions
+    restricted_states = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=_(
+            "User states that may fill out the form. "
+            "Leave empty to allow any state. Common states: member, student, alumni, inactive"
+        ),
+    )
+    restrict_by_group = models.BooleanField(
+        default=True,
+        help_text=_("Enable group-based restrictions")
+    )
+    restrict_by_state = models.BooleanField(
+        default=False,
+        help_text=_("Enable state-based restrictions")
+    )
+    restriction_logic = models.CharField(
+        max_length=3,
+        choices=[
+            ('OR', _('Either group OR state (less restrictive)')),
+            ('AND', _('Both group AND state (more restrictive)'))
+        ],
+        default='OR',
+        help_text=_("How to combine group and state restrictions when both are enabled")
     )
 
     allow_multiple = models.BooleanField(
@@ -121,19 +165,86 @@ class Form(models.Model):
     def is_eligible(self, user) -> bool:
         """Whether ``user`` is allowed to fill this form (ignoring status).
 
-        Managers may always fill (so they can preview). Otherwise: if the form has
-        no ``restricted_groups`` any authenticated user is eligible, else the user
-        must belong to at least one of the restricted groups.
+        Managers may always fill (so they can preview). Otherwise, the user must
+        meet the configured group and/or state restrictions based on the form's settings.
         """
         if not user.is_authenticated:
             return False
         if user.has_perm("euniforms.manage_forms"):
             return True
+
+        group_eligible = self._check_group_eligibility(user)
+        state_eligible = self._check_state_eligibility(user)
+
+        if self.restrict_by_group and self.restrict_by_state:
+            # Both restrictions are active
+            if self.restriction_logic == 'AND':
+                return group_eligible and state_eligible
+            else:  # OR logic
+                return group_eligible or state_eligible
+        elif self.restrict_by_group:
+            return group_eligible
+        elif self.restrict_by_state:
+            return state_eligible
+        else:
+            # No restrictions enabled - allow any authenticated user
+            return True
+
+    def _check_group_eligibility(self, user) -> bool:
+        """Check if user meets group requirements."""
         if not self.restricted_groups.exists():
             return True
         return self.restricted_groups.filter(
             pk__in=user.groups.values_list("pk", flat=True)
         ).exists()
+
+    def _check_state_eligibility(self, user) -> bool:
+        """Check if user meets state requirements."""
+        if not self.restricted_states:
+            return True
+
+        user_state = self._get_user_state(user)
+        if not user_state:
+            return False
+
+        return user_state in self.restricted_states
+
+    def _get_user_state(self, user) -> str:
+        """Get user's current state based on configured group-to-state mappings."""
+        user_groups = list(user.groups.all())
+        if not user_groups:
+            return 'member' if user.is_active else 'inactive'
+
+        # Check if any of the user's groups have configured state mappings
+        for group in user_groups:
+            try:
+                mapping = GroupStateMapping.objects.get(group=group)
+                return mapping.state
+            except GroupStateMapping.DoesNotExist:
+                continue
+
+        # No mapping found - return default state
+        return 'member' if user.is_active else 'inactive'
+
+    @classmethod
+    def get_available_states(cls):
+        """Get all available states from configured group mappings."""
+        # Get all unique states from GroupStateMapping
+        states = list(GroupStateMapping.objects.values_list('state', flat=True).distinct())
+
+        # Always include basic default states
+        basic_states = ['member', 'inactive']
+        for state in basic_states:
+            if state not in states:
+                states.append(state)
+
+        return sorted(states)
+
+    @classmethod
+    def get_state_choices(cls):
+        """Get state choices formatted for Django form fields."""
+        states = cls.get_available_states()
+        return [(state, state.title()) for state in states]
 
     def user_can_view_responses(self, user) -> bool:
         """Whether ``user`` may read this form's responses."""
