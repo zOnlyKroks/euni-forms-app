@@ -30,8 +30,6 @@ docker compose build auth
 echo
 echo "[5/6] Running database migrations..."
 docker compose run --rm auth bash -c "cd /app/myauth && python manage.py migrate"
-echo "Rolling back fake migration 0007 and applying properly..."
-docker compose run --rm auth bash -c "cd /app/myauth && python manage.py migrate euniforms 0006 --fake"
 docker compose run --rm auth bash -c "cd /app/myauth && python manage.py migrate euniforms"
 
 echo
