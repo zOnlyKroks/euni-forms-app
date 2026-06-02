@@ -83,6 +83,11 @@ class Form(models.Model):
     class Meta:
         ordering = ["-created_at"]
         default_permissions = ()
+        indexes = [
+            models.Index(fields=['status'], name='form_status_idx'),
+            models.Index(fields=['created_at'], name='form_created_at_idx'),
+            models.Index(fields=['status', 'created_at'], name='form_status_created_idx'),
+        ]
 
     def __str__(self) -> str:
         return self.title
@@ -226,6 +231,12 @@ class FormResponse(models.Model):
     class Meta:
         ordering = ["-submitted_at"]
         default_permissions = ()
+        indexes = [
+            models.Index(fields=['submitted_at'], name='response_submitted_at_idx'),
+            models.Index(fields=['form', 'submitted_at'], name='response_form_submitted_idx'),
+            models.Index(fields=['user'], name='response_user_idx'),
+            models.Index(fields=['main_character_name'], name='response_character_name_idx'),
+        ]
 
     def __str__(self) -> str:
         return f"{self.form.title} — {self.submitter_display}"
@@ -261,6 +272,11 @@ class FormAnswer(models.Model):
     class Meta:
         ordering = ["pk"]
         default_permissions = ()
+        indexes = [
+            models.Index(fields=['response'], name='answer_response_idx'),
+            models.Index(fields=['field'], name='answer_field_idx'),
+            models.Index(fields=['response', 'field'], name='answer_response_field_idx'),
+        ]
 
     def __str__(self) -> str:
         return f"{self.field_label}: {self.display_value()}"

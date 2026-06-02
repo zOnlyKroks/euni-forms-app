@@ -22,6 +22,7 @@ from allianceauth.notifications import notify
 from euniforms.forms import DynamicFillForm, FormFieldModelForm, FormModelForm
 from euniforms.models import Form, FormAnswer, FormField, FormResponse
 from euniforms.services import DiscordWebhookService
+from euniforms.logging_utils import app_logger, log_user_action, log_permission_denied
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,7 @@ def index(request):
     """Landing page: forms the user can fill, review, or manage."""
     user = request.user
     if not _has_app_access(user):
+        log_permission_denied(user, "access_forms_app", "euniforms")
         raise PermissionDenied
 
     can_manage = user.has_perm("euniforms.manage_forms")
@@ -140,7 +142,17 @@ def form_fill(request, form_pk):
                 ),
             )
         elif fill_form.is_valid():
-            _save_response(form_obj, user, main_character, fill_form)
+            response = _save_response(form_obj, user, main_character, fill_form)
+
+            # Log form submission
+            app_logger.form_submitted(
+                form_id=form_obj.pk,
+                response_id=response.pk,
+                user_id=user.id,
+                submitter_name=response.submitter_display,
+                form_title=form_obj.title
+            )
+
             messages.success(
                 request, _("Your response has been submitted. Thank you!")
             )
@@ -196,13 +208,40 @@ def _notify_viewers(form_obj, response):
 
 
 def _notify_discord(form_obj, response):
-    """Send form response to Discord webhook."""
+    """Send form response to Discord webhook with structured logging."""
+    if not form_obj.discord_webhook_url:
+        return True
+
     try:
-        DiscordWebhookService.send_form_response(
+        success = DiscordWebhookService.send_form_response(
             form_obj.discord_webhook_url, form_obj, response
         )
+
+        # Use structured logging for webhook events
+        app_logger.discord_webhook_sent(
+            form_id=form_obj.pk,
+            response_id=response.pk,
+            webhook_url=form_obj.discord_webhook_url,
+            success=success,
+            form_title=form_obj.title,
+            submitter=response.submitter_display
+        )
+
+        return success
+
     except Exception as e:
-        logger.warning(f"Discord webhook failed for form {form_obj.pk}: {e}")
+        # Log webhook failure with full context
+        app_logger.error(
+            f"Discord webhook exception for form {form_obj.pk}: {e}",
+            exc_info=True,
+            event_type="discord_webhook_error",
+            form_id=form_obj.pk,
+            form_title=form_obj.title,
+            webhook_url=form_obj.discord_webhook_url[:50] + '...' if form_obj.discord_webhook_url else None,
+            response_id=response.pk,
+            submitter=response.submitter_display
+        )
+        return False
 
 
 @login_required
@@ -229,6 +268,15 @@ def form_create(request):
             form_obj.created_by = request.user
             form_obj.save()
             form.save_m2m()
+
+            # Log form creation
+            app_logger.form_created(
+                form_id=form_obj.pk,
+                title=form_obj.title,
+                created_by_id=request.user.id,
+                status=form_obj.status
+            )
+
             messages.success(request, _("Form created. Now add some questions."))
             return redirect("euniforms:manage_fields", form_pk=form_obj.pk)
     else:
@@ -382,9 +430,10 @@ def responses_list(request, form_pk):
     fields = list(form_obj.fields.all())
     responses = form_obj.responses.select_related("user").prefetch_related("answers")
 
-    # Apply filters
+    # Apply filters using database queries for better performance
+    from django.db.models import Q
+
     if submitter_filter:
-        from django.db.models import Q
         responses = responses.filter(
             Q(user__username__icontains=submitter_filter) |
             Q(main_character_name__icontains=submitter_filter)
@@ -406,19 +455,23 @@ def responses_list(request, form_pk):
         except ValueError:
             pass  # Invalid date format, ignore filter
 
-    # Build response rows and apply content search
+    # Apply content search filter at database level for better performance
+    if search_query:
+        # Search in FormAnswer values - this uses the database instead of Python
+        response_ids_with_matching_answers = FormAnswer.objects.filter(
+            response__form=form_obj,
+            value__icontains=search_query
+        ).values_list('response_id', flat=True).distinct()
+
+        responses = responses.filter(id__in=response_ids_with_matching_answers)
+
+    # Build response rows - prefetch answers to avoid N+1 queries
+    responses = responses.prefetch_related('answers__field')
+
     rows = []
     for response in responses:
+        # Create efficient lookup dictionary
         answers_by_field = {a.field_id: a for a in response.answers.all()}
-
-        # If there's a search query, check if it matches any answer content
-        if search_query:
-            matches_content = any(
-                search_query.lower() in (answer.display_value().lower() if answer else "")
-                for answer in answers_by_field.values()
-            )
-            if not matches_content:
-                continue  # Skip this response if search doesn't match
 
         rows.append(
             {

@@ -14,27 +14,60 @@ class DiscordWebhookService:
     """Service for sending form responses to Discord webhooks."""
 
     @staticmethod
-    def send_form_response(webhook_url, form_obj, response):
+    def send_form_response(webhook_url, form_obj, response, retry_count=2):
         """
-        Send a form response to Discord webhook.
+        Send a form response to Discord webhook with retry logic.
 
         Args:
             webhook_url: Discord webhook URL
             form_obj: Form model instance
             response: FormResponse model instance
+            retry_count: Number of retry attempts (default: 2)
 
         Returns:
             bool: True if successful, False otherwise
         """
-        try:
-            payload = DiscordWebhookService.format_discord_message(form_obj, response)
-            return DiscordWebhookService._send_webhook_request(webhook_url, payload)
-        except Exception as e:
-            logger.warning(
-                f"Discord webhook failed for form {form_obj.pk}: {e}",
-                exc_info=True
-            )
+        if not webhook_url:
+            logger.warning(f"No webhook URL provided for form {form_obj.pk}")
             return False
+
+        last_exception = None
+        for attempt in range(retry_count + 1):
+            try:
+                payload = DiscordWebhookService.format_discord_message(form_obj, response)
+                success = DiscordWebhookService._send_webhook_request(webhook_url, payload)
+                if success:
+                    if attempt > 0:
+                        logger.info(f"Discord webhook succeeded on retry {attempt} for form {form_obj.pk}")
+                    return True
+                else:
+                    logger.warning(f"Discord webhook attempt {attempt + 1} failed for form {form_obj.pk}")
+                    if attempt < retry_count:
+                        # Add small delay before retry
+                        import time
+                        time.sleep(0.5 * (attempt + 1))  # Progressive delay
+
+            except Exception as e:
+                last_exception = e
+                logger.warning(
+                    f"Discord webhook attempt {attempt + 1} failed for form {form_obj.pk}: {e}"
+                )
+                if attempt < retry_count:
+                    # Add small delay before retry
+                    import time
+                    time.sleep(0.5 * (attempt + 1))  # Progressive delay
+
+        # All attempts failed
+        logger.error(
+            f"Discord webhook failed after {retry_count + 1} attempts for form {form_obj.pk}",
+            exc_info=last_exception is not None,
+            extra={
+                'webhook_url': webhook_url[:50] + '...' if len(webhook_url) > 50 else webhook_url,
+                'form_id': form_obj.pk,
+                'response_id': response.pk
+            }
+        )
+        return False
 
     @staticmethod
     def format_discord_message(form_obj, response):
