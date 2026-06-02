@@ -49,15 +49,14 @@ jobs:
           sleep 2
         done
 
-        # Create the test database and user
+        # Create the test database and user with full permissions
         echo "Creating test database and user..."
         docker compose exec -T mariadb mariadb -u root -ptest_password_123 -e "
           CREATE DATABASE IF NOT EXISTS aauth_test;
-          CREATE DATABASE IF NOT EXISTS test_aauth_test;
           CREATE USER IF NOT EXISTS 'aauth_test'@'%' IDENTIFIED BY 'test_password_123';
           GRANT ALL PRIVILEGES ON aauth_test.* TO 'aauth_test'@'%';
-          GRANT ALL PRIVILEGES ON test_aauth_test.* TO 'aauth_test'@'%';
-          GRANT CREATE ON *.* TO 'aauth_test'@'%';
+          GRANT ALL PRIVILEGES ON \`test_%\`.* TO 'aauth_test'@'%';
+          GRANT CREATE, DROP ON *.* TO 'aauth_test'@'%';
           FLUSH PRIVILEGES;
         "
 
