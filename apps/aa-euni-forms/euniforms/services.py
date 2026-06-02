@@ -81,59 +81,20 @@ class DiscordWebhookService:
         Returns:
             dict: Discord webhook payload
         """
-        # Get form answers for summary
+        # Get all form answers
         answers = response.answers.all()
 
-        # Create response summary (limit to prevent Discord message limits)
-        response_summary = []
-        for answer in answers[:5]:  # Limit to first 5 answers
-            value = answer.display_value()
-            if len(value) > 100:  # Truncate long answers
-                value = value[:97] + "..."
-            response_summary.append(f"**{answer.field_label}**: {value}")
+        # Create clean response format without metadata
+        content_lines = [form_obj.title]
 
-        if len(answers) > 5:
-            response_summary.append(f"... and {len(answers) - 5} more answers")
+        for answer in answers:
+            content_lines.append(answer.field_label)
+            content_lines.append(answer.display_value())
 
-        summary_text = "\n".join(response_summary) if response_summary else "No answers provided"
-
-        # Format timestamp
-        submitted_at = response.submitted_at.strftime("%Y-%m-%d %H:%M:%S UTC")
-
-        # Create Discord embed
-        embed = {
-            "title": f"New Form Response: {form_obj.title}",
-            "description": "A new response has been submitted",
-            "color": 3447003,  # Blue color
-            "fields": [
-                {
-                    "name": "Submitted by",
-                    "value": response.submitter_display,
-                    "inline": True
-                },
-                {
-                    "name": "Submitted at",
-                    "value": submitted_at,
-                    "inline": True
-                },
-                {
-                    "name": "Form Status",
-                    "value": form_obj.get_status_display(),
-                    "inline": True
-                },
-                {
-                    "name": "Response Summary",
-                    "value": summary_text[:1024],  # Discord field value limit
-                    "inline": False
-                }
-            ],
-            "footer": {
-                "text": "EVE University Forms"
-            }
-        }
+        content = "\n".join(content_lines)
 
         return {
-            "embeds": [embed]
+            "content": content
         }
 
     @staticmethod
