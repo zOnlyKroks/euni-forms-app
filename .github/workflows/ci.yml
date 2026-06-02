@@ -86,29 +86,6 @@ jobs:
           python manage.py check euniforms --verbosity=2
         "
 
-    - name: Test Discord webhook service
-      run: |
-        echo "🔗 Testing Discord webhook integration..."
-        docker compose run --rm auth bash -c "
-          cd /app/myauth &&
-          python manage.py shell -c \"
-from euniforms.services import DiscordWebhookService
-from euniforms.models import Form, FormResponse
-from django.contrib.auth.models import User
-
-# Test Discord webhook formatting
-print('Testing Discord webhook service...')
-user = User.objects.create_user(username='testuser')
-form = Form.objects.create(title='Test Form', created_by=user)
-response = FormResponse.objects.create(form=form, user=user, main_character_name='Test Character')
-
-payload = DiscordWebhookService.format_discord_message(form, response)
-assert 'embeds' in payload
-assert payload['embeds'][0]['title'] == 'New Form Response: Test Form'
-print('✅ Discord webhook formatting test passed')
-\"
-        "
-
     - name: Test application startup
       run: |
         echo "🚀 Testing application startup..."
@@ -150,8 +127,7 @@ print('✅ Discord webhook formatting test passed')
         echo "📊 Test Summary:"
         echo "- ✅ Database migrations"
         echo "- ✅ Django system checks"
-        echo "- ✅ EuniForms test suite (113 tests)"
-        echo "- ✅ Discord webhook integration"
+        echo "- ✅ EuniForms test suite (113 tests including Discord webhooks)"
         echo "- ✅ Application startup"
         echo "- ✅ Code quality checks"
 
