@@ -461,29 +461,52 @@ def response_detail(request, response_pk):
 @login_required
 def responses_csv(request, form_pk):
     form_obj = get_object_or_404(Form, pk=form_pk)
+
     if not form_obj.user_can_view_responses(request.user):
         raise PermissionDenied
 
     fields = list(form_obj.fields.all())
-    http_response = HttpResponse(content_type="text/csv")
-    filename = f"{slugify(form_obj.title) or 'form'}-responses.csv"
-    http_response["Content-Disposition"] = f'attachment; filename="{filename}"'
 
-    writer = csv.writer(http_response)
+    http_response = HttpResponse(
+        content_type="text/csv; charset=utf-8"
+    )
+    http_response.write("\ufeff")  # UTF-8 BOM for Excel
+
+    filename = f"{slugify(form_obj.title) or 'form'}-responses.csv"
+    http_response["Content-Disposition"] = (
+        f'attachment; filename="{filename}"'
+    )
+
+    # Use semicolon delimiter for better Excel compatibility in many locales
+    writer = csv.writer(http_response, delimiter=";")
+
     writer.writerow(
         [_("Submitted at"), _("Submitter"), _("Main character")]
         + [field.label for field in fields]
     )
-    responses = form_obj.responses.select_related("user").prefetch_related("answers")
+
+    responses = (
+        form_obj.responses
+        .select_related("user")
+        .prefetch_related("answers")
+    )
+
     for response in responses:
-        answers_by_field = {a.field_id: a for a in response.answers.all()}
+        answers_by_field = {
+            answer.field_id: answer
+            for answer in response.answers.all()
+        }
+
         row = [
             response.submitted_at.strftime("%Y-%m-%d %H:%M"),
             response.user.username if response.user else "",
             response.main_character_name,
         ]
+
         for field in fields:
             answer = answers_by_field.get(field.pk)
             row.append(answer.display_value() if answer else "")
+
         writer.writerow(row)
+
     return http_response
