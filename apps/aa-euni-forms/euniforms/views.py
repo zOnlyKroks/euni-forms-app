@@ -564,3 +564,46 @@ def responses_csv(request, form_pk):
         writer.writerow(row)
 
     return http_response
+
+
+@login_required
+def response_delete(request, response_pk):
+    """Delete a form response (does not trigger Discord notifications)."""
+    response = get_object_or_404(
+        FormResponse.objects.select_related("form", "user"), pk=response_pk
+    )
+
+    # Check permissions - only managers or form viewers can delete responses
+    if not response.form.user_can_view_responses(request.user):
+        raise PermissionDenied
+
+    if request.method == "POST":
+        form_obj = response.form
+        submitter_name = response.submitter_display
+
+        # Delete the response directly (this will cascade delete answers)
+        response.delete()
+
+        # Log the deletion
+        app_logger.info(
+            f"Response deleted by {request.user.username}",
+            event_type="response_deleted",
+            form_id=form_obj.pk,
+            form_title=form_obj.title,
+            response_id=response_pk,
+            submitter=submitter_name,
+            deleted_by_id=request.user.id,
+            deleted_by=request.user.username
+        )
+
+        messages.success(
+            request,
+            _('Response from "%(submitter)s" has been deleted.') % {"submitter": submitter_name}
+        )
+        return redirect("euniforms:responses_list", form_pk=form_obj.pk)
+
+    return render(
+        request,
+        "euniforms/manage/response_confirm_delete.html",
+        {"response": response, "form_obj": response.form}
+    )

@@ -34,4 +34,9 @@ urlpatterns = [
         views.response_detail,
         name="response_detail",
     ),
+    path(
+        "manage/response/<int:response_pk>/delete/",
+        views.response_delete,
+        name="response_delete",
+    ),
 ]

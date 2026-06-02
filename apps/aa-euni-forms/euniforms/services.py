@@ -81,20 +81,29 @@ class DiscordWebhookService:
         Returns:
             dict: Discord webhook payload
         """
-        # Get all form answers
         answers = response.answers.all()
 
-        # Create clean response format without metadata
-        content_lines = [form_obj.title]
+        content_parts = []
 
         for answer in answers:
-            content_lines.append(answer.field_label)
-            content_lines.append(answer.display_value())
+            content_parts.append(f"**{answer.field_label}**")
+            content_parts.append(answer.display_value())
 
-        content = "\n".join(content_lines)
+        response_text = "\n".join(content_parts) if content_parts else "No answers provided"
+
+        submitted_time = response.submitted_at.strftime("%d.%m.%Y um %H:%M Uhr")
+
+        embed = {
+            "title": form_obj.title,
+            "description": response_text[:4096],
+            "color": 3447003,
+            "footer": {
+                "text": f"{form_obj.title} • {submitted_time}"
+            }
+        }
 
         return {
-            "content": content
+            "embeds": [embed]
         }
 
     @staticmethod

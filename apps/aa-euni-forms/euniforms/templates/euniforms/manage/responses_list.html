@@ -86,6 +86,9 @@
                                     {% endfor %}
                                     <td class="text-end">
                                         <a href="{% url 'euniforms:response_detail' row.response.pk %}" class="btn btn-sm btn-outline-secondary">{% translate "View" %}</a>
+                                        <a href="{% url 'euniforms:response_delete' row.response.pk %}" class="btn btn-sm btn-outline-danger ms-1" title="{% translate 'Delete response' %}">
+                                            <i class="fas fa-trash fa-fw"></i>
+                                        </a>
                                     </td>
                                 </tr>
                             {% endfor %}

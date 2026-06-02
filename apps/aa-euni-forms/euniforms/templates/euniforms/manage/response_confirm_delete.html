@@ -1,0 +1,35 @@
+{% extends "euniforms/base.html" %}
+{% load i18n %}
+
+{% block euniforms_content %}
+    <div class="card border-danger">
+        <div class="card-header bg-danger text-white">{% translate "Delete response" %}</div>
+        <div class="card-body">
+            <p>
+                {% blocktranslate with submitter=response.submitter_display form_title=form_obj.title %}Are you sure you want to delete the response from "{{ submitter }}" to "{{ form_title }}"? This action cannot be undone.{% endblocktranslate %}
+            </p>
+
+            <div class="mb-3">
+                <h6 class="text-muted">{% translate "Response preview:" %}</h6>
+                <div class="border rounded p-3 bg-light">
+                    <dl class="row mb-0">
+                        {% for answer in response.answers.all|slice:":3" %}
+                            <dt class="col-sm-4 text-truncate">{{ answer.field_label }}</dt>
+                            <dd class="col-sm-8">{{ answer.display_value|truncatechars:80|default:"—" }}</dd>
+                        {% endfor %}
+                        {% if response.answers.all|length > 3 %}
+                            <dt class="col-sm-4 text-muted">...</dt>
+                            <dd class="col-sm-8 text-muted">and {{ response.answers.all|length|add:"-3" }} more answers</dd>
+                        {% endif %}
+                    </dl>
+                </div>
+            </div>
+
+            <form method="post">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-danger">{% translate "Delete permanently" %}</button>
+                <a href="{% url 'euniforms:response_detail' response.pk %}" class="btn btn-outline-secondary">{% translate "Cancel" %}</a>
+            </form>
+        </div>
+    </div>
+{% endblock %}

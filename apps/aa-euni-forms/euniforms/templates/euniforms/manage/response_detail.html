@@ -4,7 +4,12 @@
 {% block euniforms_content %}
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h1 class="mb-0">{{ form_obj.title }}</h1>
-        <a href="{% url 'euniforms:responses_list' form_obj.pk %}" class="btn btn-sm btn-outline-secondary">{% translate "Back to responses" %}</a>
+        <div>
+            <a href="{% url 'euniforms:response_delete' response.pk %}" class="btn btn-sm btn-outline-danger">
+                <i class="fas fa-trash fa-fw"></i> {% translate "Delete" %}
+            </a>
+            <a href="{% url 'euniforms:responses_list' form_obj.pk %}" class="btn btn-sm btn-outline-secondary">{% translate "Back to responses" %}</a>
+        </div>
     </div>
 
     <div class="card mb-3">
