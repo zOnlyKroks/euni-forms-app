@@ -10,12 +10,13 @@ ARG DOCKER_HOST_UID=1000
 ARG DOCKER_HOST_GID=1000 
 
 # Things done as root
-COPY ./scripts/auth_startup.sh /startup.sh
-RUN chmod 755 /startup.sh
-
 RUN apt-get update && apt-get upgrade -y
-RUN apt-get install -y build-essential gettext git mariadb-client libmariadb-dev
+RUN apt-get install -y build-essential gettext git mariadb-client libmariadb-dev dos2unix
+
 RUN groupadd -g ${DOCKER_HOST_GID} euni-aa-dev && useradd -u ${DOCKER_HOST_UID} -g euni-aa-dev -m -d /app euni-aa-dev
+
+COPY ./scripts/auth_startup.sh /startup.sh
+RUN dos2unix /startup.sh && chmod +x /startup.sh
 
 RUN mkdir -p /var/www
 
