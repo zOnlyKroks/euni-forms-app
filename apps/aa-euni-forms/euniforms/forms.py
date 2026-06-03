@@ -183,20 +183,34 @@ class DynamicFillForm(forms.Form):
             self._field_map[name] = question
 
     def _build_character_choices(self, user) -> list[tuple[str, str]]:
-        """Choices of the user's SSO-verified characters (their alts)."""
+        """Choices of the user's SSO-verified characters (including main and all alts)."""
         choices: list[tuple[str, str]] = []
-        if user is None or not hasattr(user, "character_ownerships"):
+        if user is None:
             return choices
+
         seen: set[str] = set()
-        ownerships = user.character_ownerships.select_related("character").all()
-        for ownership in ownerships:
-            character = ownership.character
-            cid = str(character.character_id)
-            if cid in seen:
-                continue
-            seen.add(cid)
-            choices.append((cid, character.character_name))
-            self._character_names[cid] = character.character_name
+
+        # First, ensure the main character is always included
+        if hasattr(user, "profile") and user.profile and user.profile.main_character:
+            main_char = user.profile.main_character
+            main_cid = str(main_char.character_id)
+            seen.add(main_cid)
+            choices.append((main_cid, f"{main_char.character_name} (Main)"))
+            self._character_names[main_cid] = main_char.character_name
+
+        # Then add all other SSO-verified characters (alts)
+        if hasattr(user, "character_ownerships"):
+            ownerships = user.character_ownerships.select_related("character").all()
+            for ownership in ownerships:
+                character = ownership.character
+                cid = str(character.character_id)
+                if cid in seen:
+                    continue
+                seen.add(cid)
+                choices.append((cid, character.character_name))
+                self._character_names[cid] = character.character_name
+
+        # Sort choices by character name (case-insensitive)
         choices.sort(key=lambda choice: choice[1].lower())
         return choices
 
