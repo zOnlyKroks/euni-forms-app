@@ -91,7 +91,7 @@ class DiscordWebhookService:
 
         response_text = "\n".join(content_parts) if content_parts else "No answers provided"
 
-        submitted_time = response.submitted_at.strftime("%d.%m.%Y um %H:%M Uhr")
+        submitted_time = response.submitted_at.strftime("%Y-%m-%dT%H:%M")
 
         embed = {
             "title": form_obj.title,
