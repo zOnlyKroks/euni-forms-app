@@ -98,7 +98,7 @@ class DiscordWebhookService:
             "description": response_text[:4096],
             "color": 3447003,
             "footer": {
-                "text": f"{form_obj.title} • {submitted_time}"
+                "text": f"{form_obj.title} - {response.submitter_display} • {submitted_time}"
             }
         }
 
