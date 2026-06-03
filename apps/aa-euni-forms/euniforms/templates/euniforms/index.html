@@ -88,7 +88,7 @@
         </div>
     {% endif %}
 
-    {% if can_manage %}
+    {% if can_manage or managed_forms %}
         <div class="card mb-4">
             <div class="card-header">
                 <h2 class="card-title h5 mb-0">{% translate "Manage forms" %}</h2>
@@ -123,7 +123,9 @@
                                             <a href="{% url 'euniforms:manage_fields' form.pk %}" class="btn btn-sm btn-outline-secondary" title="{% translate 'Questions' %}"><i class="fas fa-list-ol fa-fw"></i></a>
                                             <a href="{% url 'euniforms:form_edit' form.pk %}" class="btn btn-sm btn-outline-secondary" title="{% translate 'Settings' %}"><i class="fas fa-gear fa-fw"></i></a>
                                             <a href="{% url 'euniforms:responses_list' form.pk %}" class="btn btn-sm btn-outline-secondary" title="{% translate 'Responses' %}"><i class="fas fa-inbox fa-fw"></i></a>
-                                            <a href="{% url 'euniforms:form_delete' form.pk %}" class="btn btn-sm btn-outline-danger" title="{% translate 'Delete' %}"><i class="fas fa-trash fa-fw"></i></a>
+                                            {% if can_manage %}
+                                                <a href="{% url 'euniforms:form_delete' form.pk %}" class="btn btn-sm btn-outline-danger" title="{% translate 'Delete' %}"><i class="fas fa-trash fa-fw"></i></a>
+                                            {% endif %}
                                         </td>
                                     </tr>
                                 {% endfor %}
