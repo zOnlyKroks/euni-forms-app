@@ -371,14 +371,19 @@ class FormField(models.Model):
 
     class FieldType(models.TextChoices):
         SHORT_TEXT = "SHORT_TEXT", _("Short text")
-        LONG_TEXT = "LONG_TEXT", _("Paragraph text")
         FREE_TEXT = "FREE_TEXT", _("Free text (up to 1000 characters)")
         SINGLE_CHOICE = "SINGLE_CHOICE", _("Single choice")
         MULTI_CHOICE = "MULTI_CHOICE", _("Multiple choice")
         NUMBER = "NUMBER", _("Number")
-        DATE = "DATE", _("Date")
+        DATE_CURRENT = "DATE_CURRENT", _("Date (always current date)")
+        DATETIME = "DATETIME", _("Date and time")
         BOOLEAN = "BOOLEAN", _("Yes / No")
         EVE_CHARACTER = "EVE_CHARACTER", _("EVE character (verified)")
+        USER_PICKER = "USER_PICKER", _("User picker (search and select)")
+        URL = "URL", _("URL / Link")
+        ISK_AMOUNT = "ISK_AMOUNT", _("ISK Amount")
+        RATING_5 = "RATING_5", _("Rating (1-5 stars)")
+        RATING_10 = "RATING_10", _("Rating (1-10 scale)")
 
     form = models.ForeignKey(Form, on_delete=models.CASCADE, related_name="fields")
     order = models.PositiveIntegerField(default=0)
@@ -503,5 +508,54 @@ class FormAnswer(models.Model):
         if self.field_type == FormField.FieldType.EVE_CHARACTER:
             if isinstance(value, dict):
                 return value.get("character_name", "")
+            return str(value)
+        if self.field_type == FormField.FieldType.USER_PICKER:
+            if isinstance(value, dict):
+                # Handle new format with type information
+                if value.get("type") == "main":
+                    return f"{value.get('character_name', '')} (Main)"
+                elif value.get("type") == "alt":
+                    return f"{value.get('character_name', '')} (Alt)"
+                elif value.get("type") == "user":
+                    return f"{value.get('username', '')} (No Characters)"
+                else:
+                    # Fallback for old format or unknown type
+                    return value.get("username", "") or value.get("character_name", "") or value.get("name", "")
+            return str(value)
+        if self.field_type == FormField.FieldType.URL:
+            # Display as clickable link in templates
+            return str(value)
+        if self.field_type == FormField.FieldType.ISK_AMOUNT:
+            # Format ISK with comma separators
+            if isinstance(value, (int, float)):
+                return f"{value:,.2f} ISK"
+            return str(value)
+        if self.field_type == FormField.FieldType.RATING_5:
+            # Display as stars (★★★☆☆)
+            if isinstance(value, int) and 1 <= value <= 5:
+                stars = "★" * value + "☆" * (5 - value)
+                return f"{stars} ({value}/5)"
+            return str(value)
+        if self.field_type == FormField.FieldType.RATING_10:
+            # Display as stars (★★★★★★★☆☆☆)
+            if isinstance(value, int) and 1 <= value <= 10:
+                stars = "★" * value + "☆" * (10 - value)
+                return f"{stars} ({value}/10)"
+            return str(value)
+        if self.field_type in (FormField.FieldType.DATE_CURRENT, FormField.FieldType.DATETIME):
+            # Handle datetime strings - convert from ISO format to readable format
+            if isinstance(value, str):
+                try:
+                    from django.utils import timezone, formats
+                    from datetime import datetime
+                    # Parse ISO format datetime
+                    dt = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                    # Convert to local time if needed and format
+                    if self.field_type == FormField.FieldType.DATETIME:
+                        return formats.date_format(timezone.localtime(dt), 'DATETIME_FORMAT')
+                    else:
+                        return formats.date_format(dt.date(), 'DATE_FORMAT')
+                except (ValueError, AttributeError):
+                    pass
             return str(value)
         return str(value)

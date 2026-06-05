@@ -7,13 +7,410 @@ validation — not CSS classes.
 
 # Django
 from django import forms
-from django.contrib.auth.models import Group
+from django.contrib.auth.models import Group, User
 from django.utils.translation import gettext_lazy as _
+from django.utils import timezone
+from django.utils.safestring import mark_safe
 
 # AA EVE Uni Forms
 from euniforms.models import FieldChoice, Form, FormField
 
 BOOLEAN_CHOICES = [("", "---------"), ("yes", _("Yes")), ("no", _("No"))]
+
+
+class StarRatingWidget(forms.Widget):
+    """Custom widget for clickable star ratings."""
+
+    def __init__(self, max_rating=5, attrs=None):
+        self.max_rating = max_rating
+        super().__init__(attrs)
+
+    def render(self, name, value, attrs=None, renderer=None):
+        if value is None:
+            value = 0
+        else:
+            try:
+                value = int(value)
+            except (ValueError, TypeError):
+                value = 0
+
+        if attrs is None:
+            attrs = {}
+
+        attrs['class'] = attrs.get('class', '') + ' star-rating-widget'
+        attrs['data-max-rating'] = self.max_rating
+
+        # Hidden input to store the actual value
+        hidden_input = f'<input type="hidden" name="{name}" id="id_{name}" value="{value}">'
+
+        # Star display
+        stars_html = f'<div class="star-rating" data-field-name="{name}" data-current-rating="{value}">'
+        for i in range(1, self.max_rating + 1):
+            star_class = "star filled" if i <= value else "star empty"
+            stars_html += f'<span class="{star_class}" data-rating="{i}">★</span>'
+        stars_html += '</div>'
+
+        # CSS and JavaScript for the stars
+        style_and_script = f'''
+        <style>
+        .star-rating .star {{
+            font-size: 1.5em;
+            cursor: pointer;
+            color: #ddd;
+            transition: color 0.2s;
+            margin-right: 2px;
+        }}
+        .star-rating .star.filled {{
+            color: #ffd700;
+        }}
+        .star-rating .star:hover,
+        .star-rating .star.hover {{
+            color: #ffc107;
+        }}
+        .star-rating {{
+            user-select: none;
+            margin: 5px 0;
+        }}
+        </style>
+        <script>
+        (function() {{
+            function initStarRating(container) {{
+                const stars = container.querySelectorAll('.star');
+                const fieldName = container.dataset.fieldName;
+                const hiddenInput = document.querySelector('input[name="' + fieldName + '"]');
+
+                stars.forEach((star, index) => {{
+                    star.addEventListener('click', function() {{
+                        const rating = parseInt(this.dataset.rating);
+                        hiddenInput.value = rating;
+                        updateStars(container, rating);
+                    }});
+
+                    star.addEventListener('mouseenter', function() {{
+                        const rating = parseInt(this.dataset.rating);
+                        highlightStars(container, rating);
+                    }});
+                }});
+
+                container.addEventListener('mouseleave', function() {{
+                    const currentRating = parseInt(hiddenInput.value) || 0;
+                    updateStars(container, currentRating);
+                }});
+            }}
+
+            function updateStars(container, rating) {{
+                const stars = container.querySelectorAll('.star');
+                stars.forEach((star, index) => {{
+                    const starRating = parseInt(star.dataset.rating);
+                    star.className = starRating <= rating ? 'star filled' : 'star empty';
+                }});
+            }}
+
+            function highlightStars(container, rating) {{
+                const stars = container.querySelectorAll('.star');
+                stars.forEach((star, index) => {{
+                    const starRating = parseInt(star.dataset.rating);
+                    star.className = starRating <= rating ? 'star hover' : 'star empty';
+                }});
+            }}
+
+            // Initialize when DOM is ready
+            if (document.readyState === 'loading') {{
+                document.addEventListener('DOMContentLoaded', function() {{
+                    const starContainer = document.querySelector('[data-field-name="{name}"]');
+                    if (starContainer) initStarRating(starContainer);
+                }});
+            }} else {{
+                const starContainer = document.querySelector('[data-field-name="{name}"]');
+                if (starContainer) initStarRating(starContainer);
+            }}
+        }})();
+        </script>
+        '''
+
+        return mark_safe(hidden_input + stars_html + style_and_script)
+
+
+class CurrentDateWidget(forms.Widget):
+    """Custom widget that always displays the current date."""
+
+    def render(self, name, value, attrs=None, renderer=None):
+        current_date = timezone.now().date()
+        current_date_str = current_date.strftime("%Y-%m-%d")
+
+        # Hidden input to store the current date value
+        hidden_input = f'<input type="hidden" name="{name}" id="id_{name}" value="{current_date_str}">'
+
+        # Display the current date in a disabled date input field
+        display_input = f'''<input type="date" value="{current_date_str}"
+                            readonly disabled
+                            style="background-color: #f8f9fa; cursor: not-allowed; color: #6c757d;"
+                            class="form-control">'''
+
+        return mark_safe(hidden_input + display_input)
+
+
+class SearchableCharacterWidget(forms.Widget):
+    """Custom widget for searchable character selection."""
+
+    def render(self, name, value, attrs=None, renderer=None):
+        if value is None:
+            value = ""
+
+        if attrs is None:
+            attrs = {}
+
+        # Get choices - ensure we have them
+        choices = getattr(self, '_choices', [])
+
+        # Get the display name for the selected value
+        display_value = ""
+        if value and choices:
+            for choice_value, choice_label in choices:
+                if choice_value == str(value):
+                    display_value = choice_label
+                    break
+
+        widget_id = attrs.get('id', f'id_{name}')
+
+        # Convert choices to JavaScript safely
+        import json
+        choices_js = json.dumps(choices)
+
+        html = f'''
+        <div class="searchable-character-picker" data-field-name="{name}">
+            <input type="hidden" name="{name}" id="{widget_id}" value="{value}">
+            <input type="text"
+                   class="form-control searchable-input"
+                   placeholder="Type character name to search... ({len(choices)} characters available)"
+                   value="{display_value}"
+                   autocomplete="off"
+                   id="{widget_id}_search">
+            <div class="search-results" id="{widget_id}_results" style="display: none;">
+                <div class="no-results">Start typing to search characters...</div>
+            </div>
+        </div>
+
+        <style>
+        .searchable-character-picker {{
+            position: relative;
+            width: 100%;
+        }}
+
+        .searchable-character-picker .searchable-input {{
+            color: #212529 !important;
+            background-color: #ffffff !important;
+            border: 1px solid #ced4da !important;
+            border-radius: 0.375rem !important;
+            padding: 0.375rem 0.75rem !important;
+            font-size: 1rem !important;
+            line-height: 1.5 !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+        }}
+
+        .searchable-character-picker .searchable-input:focus {{
+            color: #212529 !important;
+            background-color: #ffffff !important;
+            border-color: #86b7fe !important;
+            outline: 0 !important;
+            box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25) !important;
+        }}
+
+        .searchable-character-picker .searchable-input::placeholder {{
+            color: #6c757d !important;
+            opacity: 1 !important;
+        }}
+
+        .searchable-character-picker .search-results {{
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ced4da;
+            border-top: none;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            border-radius: 0 0 0.375rem 0.375rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }}
+
+        .searchable-character-picker .search-result {{
+            padding: 8px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #f8f9fa;
+            color: #212529 !important;
+            background-color: white;
+        }}
+
+        .searchable-character-picker .search-result:hover {{
+            background-color: #f8f9fa !important;
+            color: #212529 !important;
+        }}
+
+        .searchable-character-picker .search-result.selected {{
+            background-color: #007bff !important;
+            color: white !important;
+        }}
+
+        .searchable-character-picker .no-results {{
+            padding: 12px;
+            color: #6c757d !important;
+            font-style: italic;
+        }}
+
+        .searchable-input:focus + .search-results {{
+            display: block !important;
+        }}
+        </style>
+
+        <script>
+        (function() {{
+            const characterChoices = {choices_js};
+            console.log('Character choices loaded:', characterChoices.length, 'characters');
+
+            function initSearchableCharacterPicker(container) {{
+                const fieldName = container.dataset.fieldName;
+                const hiddenInput = container.querySelector('input[type="hidden"]');
+                const searchInput = container.querySelector('.searchable-input');
+                const resultsDiv = container.querySelector('.search-results');
+
+                if (!characterChoices || characterChoices.length === 0) {{
+                    searchInput.placeholder = 'No characters available';
+                    return;
+                }}
+
+                let selectedIndex = -1;
+                let filteredChoices = [];
+
+                function showResults() {{
+                    resultsDiv.style.display = 'block';
+                }}
+
+                function hideResults() {{
+                    setTimeout(() => {{
+                        resultsDiv.style.display = 'none';
+                    }}, 200);
+                }}
+
+                function filterChoices(query) {{
+                    if (!query.trim()) {{
+                        filteredChoices = characterChoices.slice(0, 50); // Show first 50 when empty
+                    }} else {{
+                        filteredChoices = characterChoices.filter(choice => {{
+                            const fullText = choice[1].toLowerCase();
+                            const query_lower = query.toLowerCase();
+
+                            // Extract character name (part before the first parenthesis)
+                            const characterName = fullText.split('(')[0].trim();
+
+                            // Search ONLY in character name, ignore parentheses content
+                            return characterName.includes(query_lower);
+                        }}).slice(0, 20); // Limit to 20 results
+                    }}
+                    renderResults();
+                }}
+
+                function renderResults() {{
+                    if (filteredChoices.length === 0) {{
+                        resultsDiv.innerHTML = '<div class="no-results">No characters found</div>';
+                        return;
+                    }}
+
+                    let html = '';
+                    filteredChoices.forEach((choice, index) => {{
+                        const isSelected = index === selectedIndex ? 'selected' : '';
+                        const escapedValue = choice[0].replace(/"/g, '&quot;');
+                        const escapedLabel = choice[1].replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                        html += `<div class="search-result ${{isSelected}}" data-value="${{escapedValue}}" data-index="${{index}}">${{escapedLabel}}</div>`;
+                    }});
+                    resultsDiv.innerHTML = html;
+
+                    // Add click handlers to results
+                    resultsDiv.querySelectorAll('.search-result').forEach(result => {{
+                        result.addEventListener('click', function() {{
+                            selectChoice(this.dataset.value, this.textContent);
+                        }});
+                    }});
+                }}
+
+                function selectChoice(value, label) {{
+                    hiddenInput.value = value;
+                    searchInput.value = label;
+                    hideResults();
+                    selectedIndex = -1;
+                }}
+
+                function updateSelection() {{
+                    resultsDiv.querySelectorAll('.search-result').forEach((result, index) => {{
+                        result.classList.toggle('selected', index === selectedIndex);
+                    }});
+                }}
+
+                // Event listeners
+                searchInput.addEventListener('input', function() {{
+                    filterChoices(this.value);
+                    selectedIndex = -1;
+                    showResults();
+                }});
+
+                searchInput.addEventListener('focus', function() {{
+                    filterChoices(this.value);
+                    showResults();
+                }});
+
+                searchInput.addEventListener('blur', hideResults);
+
+                searchInput.addEventListener('keydown', function(e) {{
+                    if (!resultsDiv.style.display || resultsDiv.style.display === 'none') return;
+
+                    if (e.key === 'ArrowDown') {{
+                        e.preventDefault();
+                        selectedIndex = Math.min(selectedIndex + 1, filteredChoices.length - 1);
+                        updateSelection();
+                    }} else if (e.key === 'ArrowUp') {{
+                        e.preventDefault();
+                        selectedIndex = Math.max(selectedIndex - 1, -1);
+                        updateSelection();
+                    }} else if (e.key === 'Enter') {{
+                        e.preventDefault();
+                        if (selectedIndex >= 0 && filteredChoices[selectedIndex]) {{
+                            const choice = filteredChoices[selectedIndex];
+                            selectChoice(choice[0], choice[1]);
+                        }}
+                    }} else if (e.key === 'Escape') {{
+                        hideResults();
+                        selectedIndex = -1;
+                    }}
+                }});
+
+                // Initialize with empty search to show first results
+                filterChoices('');
+            }}
+
+            // Initialize when DOM is ready
+            if (document.readyState === 'loading') {{
+                document.addEventListener('DOMContentLoaded', function() {{
+                    const container = document.querySelector('[data-field-name="{name}"]');
+                    if (container) initSearchableCharacterPicker(container);
+                }});
+            }} else {{
+                const container = document.querySelector('[data-field-name="{name}"]');
+                if (container) initSearchableCharacterPicker(container);
+            }}
+        }})();
+        </script>
+        '''
+
+        return mark_safe(html)
+
+    def _get_choices_js(self):
+        """Convert choices to JavaScript array format."""
+        import json
+        choices = getattr(self, '_choices', [])
+        return json.dumps(choices)
 
 
 class FormModelForm(forms.ModelForm):
@@ -176,6 +573,8 @@ class DynamicFillForm(forms.Form):
         self._field_map: dict[str, FormField] = {}
         self._character_names: dict[str, str] = {}
         self._character_choices = self._build_character_choices(user)
+        self._user_names: dict[str, str] = {}
+        self._user_choices = self._build_user_choices()
 
         for question in form_obj.fields.all().prefetch_related("choices"):
             name = f"field_{question.pk}"
@@ -214,6 +613,50 @@ class DynamicFillForm(forms.Form):
         choices.sort(key=lambda choice: choice[1].lower())
         return choices
 
+    def _build_user_choices(self) -> list[tuple[str, str]]:
+        """Choices of all characters from all users in the system."""
+        choices: list[tuple[str, str]] = []
+
+        # Get all active users and their characters
+        users = User.objects.filter(is_active=True).prefetch_related('character_ownerships__character').order_by('username')
+
+        for user in users:
+            # Add the main character first if available
+            if hasattr(user, 'profile') and user.profile and user.profile.main_character:
+                main_char = user.profile.main_character
+                main_char_id = f"main_{main_char.character_id}"
+                display_name = f"{main_char.character_name} (Main - {user.username})"
+                choices.append((main_char_id, display_name))
+                self._user_names[main_char_id] = main_char.character_name
+
+            # Add all other SSO-verified characters for this user
+            if hasattr(user, 'character_ownerships'):
+                ownerships = user.character_ownerships.select_related('character').all()
+                for ownership in ownerships:
+                    character = ownership.character
+                    char_id = f"char_{character.character_id}"
+
+                    # Skip if this is already the main character
+                    if (hasattr(user, 'profile') and user.profile and user.profile.main_character and
+                        character.character_id == user.profile.main_character.character_id):
+                        continue
+
+                    display_name = f"{character.character_name} (Alt - {user.username})"
+                    choices.append((char_id, display_name))
+                    self._user_names[char_id] = character.character_name
+
+            # If no characters found, add the user by username as fallback
+            if not hasattr(user, 'character_ownerships') or not user.character_ownerships.exists():
+                if not (hasattr(user, 'profile') and user.profile and user.profile.main_character):
+                    user_id = f"user_{user.id}"
+                    display_name = f"{user.username} (No characters)"
+                    choices.append((user_id, display_name))
+                    self._user_names[user_id] = user.username
+
+        # Sort choices by character/user name (case-insensitive)
+        choices.sort(key=lambda choice: choice[1].lower())
+        return choices
+
     def _build_field(self, question: FormField) -> forms.Field:
         FieldType = FormField.FieldType
         common = {
@@ -224,8 +667,6 @@ class DynamicFillForm(forms.Form):
 
         if question.field_type == FieldType.SHORT_TEXT:
             return forms.CharField(max_length=1000, **common)
-        if question.field_type == FieldType.LONG_TEXT:
-            return forms.CharField(widget=forms.Textarea(attrs={"rows": 4}), **common)
         if question.field_type == FieldType.FREE_TEXT:
             return forms.CharField(
                 max_length=1000,
@@ -234,9 +675,17 @@ class DynamicFillForm(forms.Form):
             )
         if question.field_type == FieldType.NUMBER:
             return forms.DecimalField(**common)
-        if question.field_type == FieldType.DATE:
-            return forms.DateField(
-                widget=forms.DateInput(attrs={"type": "date"}), **common
+        if question.field_type == FieldType.DATE_CURRENT:
+            # Date field that always uses current date (read-only display)
+            return forms.CharField(
+                widget=CurrentDateWidget(),
+                **common
+            )
+        if question.field_type == FieldType.DATETIME:
+            # DateTime field for both date and time selection
+            return forms.DateTimeField(
+                widget=forms.DateTimeInput(attrs={"type": "datetime-local"}),
+                **common
             )
         if question.field_type == FieldType.BOOLEAN:
             return forms.ChoiceField(choices=BOOLEAN_CHOICES, **common)
@@ -252,6 +701,36 @@ class DynamicFillForm(forms.Form):
             return forms.ChoiceField(
                 choices=[("", "---------")] + self._character_choices, **common
             )
+        if question.field_type == FieldType.USER_PICKER:
+            widget = SearchableCharacterWidget()
+            widget._choices = self._user_choices  # Pass choices to widget
+            return forms.CharField(
+                widget=widget, **common
+            )
+        if question.field_type == FieldType.URL:
+            return forms.URLField(**common)
+        if question.field_type == FieldType.ISK_AMOUNT:
+            return forms.DecimalField(
+                decimal_places=2,
+                max_digits=20,
+                min_value=0,
+                widget=forms.NumberInput(attrs={"step": "0.01", "placeholder": "0.00"}),
+                **common
+            )
+        if question.field_type == FieldType.RATING_5:
+            return forms.IntegerField(
+                min_value=1,
+                max_value=5,
+                widget=StarRatingWidget(max_rating=5),
+                **common
+            )
+        if question.field_type == FieldType.RATING_10:
+            return forms.IntegerField(
+                min_value=1,
+                max_value=10,
+                widget=StarRatingWidget(max_rating=10),
+                **common
+            )
         return forms.CharField(**common)  # pragma: no cover - defensive
 
     def iter_answers(self):
@@ -265,7 +744,10 @@ class DynamicFillForm(forms.Form):
             return None
         if question.field_type == FieldType.NUMBER:
             return int(raw) if raw == raw.to_integral_value() else float(raw)
-        if question.field_type == FieldType.DATE:
+        if question.field_type == FieldType.DATE_CURRENT:
+            # Always use current date regardless of user input
+            return timezone.now().date().isoformat()
+        if question.field_type == FieldType.DATETIME:
             return raw.isoformat()
         if question.field_type == FieldType.BOOLEAN:
             return raw == "yes"
@@ -277,4 +759,45 @@ class DynamicFillForm(forms.Form):
                 "character_id": int(cid),
                 "character_name": self._character_names.get(cid, ""),
             }
+        if question.field_type == FieldType.USER_PICKER:
+            uid = str(raw)
+            character_name = self._user_names.get(uid, "")
+
+            # Extract the actual ID and type from prefixed format
+            if uid.startswith("main_"):
+                char_id = uid.replace("main_", "")
+                return {
+                    "character_id": int(char_id),
+                    "character_name": character_name,
+                    "type": "main"
+                }
+            elif uid.startswith("char_"):
+                char_id = uid.replace("char_", "")
+                return {
+                    "character_id": int(char_id),
+                    "character_name": character_name,
+                    "type": "alt"
+                }
+            elif uid.startswith("user_"):
+                user_id = uid.replace("user_", "")
+                return {
+                    "user_id": int(user_id),
+                    "username": character_name,
+                    "type": "user"
+                }
+            else:
+                # Fallback for any unexpected format
+                return {
+                    "raw_id": uid,
+                    "name": character_name,
+                    "type": "unknown"
+                }
+        if question.field_type == FieldType.URL:
+            return str(raw)
+        if question.field_type == FieldType.ISK_AMOUNT:
+            # Store as float with proper precision
+            return float(raw)
+        if question.field_type in (FieldType.RATING_5, FieldType.RATING_10):
+            # Store as integer rating
+            return int(raw)
         return raw
