@@ -80,7 +80,7 @@
                     {% for form in reviewable_forms %}
                         <a href="{% url 'euniforms:responses_list' form.pk %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
                             <span>{{ form.title }}</span>
-                            <span class="badge bg-primary rounded-pill">{{ form.responses.count }}</span>
+                            <span class="badge bg-primary rounded-pill">{{ form.response_count }}</span>
                         </a>
                     {% endfor %}
                 </div>
@@ -118,7 +118,7 @@
                                                 <span class="badge bg-warning text-dark">{{ form.get_status_display }}</span>
                                             {% endif %}
                                         </td>
-                                        <td><a href="{% url 'euniforms:responses_list' form.pk %}">{{ form.responses.count }}</a></td>
+                                        <td><a href="{% url 'euniforms:responses_list' form.pk %}">{{ form.response_count }}</a></td>
                                         <td class="text-end">
                                             <a href="{% url 'euniforms:manage_fields' form.pk %}" class="btn btn-sm btn-outline-secondary" title="{% translate 'Questions' %}"><i class="fas fa-list-ol fa-fw"></i></a>
                                             <a href="{% url 'euniforms:form_edit' form.pk %}" class="btn btn-sm btn-outline-secondary" title="{% translate 'Settings' %}"><i class="fas fa-gear fa-fw"></i></a>

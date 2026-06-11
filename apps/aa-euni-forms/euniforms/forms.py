@@ -413,6 +413,280 @@ class SearchableCharacterWidget(forms.Widget):
         return json.dumps(choices)
 
 
+class AjaxSearchableCharacterWidget(forms.Widget):
+    """Optimized character picker widget using AJAX search instead of loading all users."""
+
+    def render(self, name, value, attrs=None, renderer=None):
+        from django.urls import reverse
+
+        if value is None:
+            value = ""
+
+        if attrs is None:
+            attrs = {}
+
+        widget_id = attrs.get('id', f'id_{name}')
+
+        # Get display name for existing value - minimal database query
+        display_value = ""
+        if value:
+            display_value = self._get_display_name(value)
+
+        # Get the search API URL
+        search_url = reverse('euniforms:search_characters_api')
+
+        html = f'''
+        <div class="ajax-character-picker" data-field-name="{name}" data-search-url="{search_url}">
+            <input type="hidden" name="{name}" id="{widget_id}" value="{value}">
+            <input type="text"
+                   class="form-control ajax-search-input"
+                   placeholder="Type character name to search (min 2 characters)..."
+                   value="{display_value}"
+                   autocomplete="off"
+                   id="{widget_id}_search">
+            <div class="search-results ajax-results" id="{widget_id}_results" style="display: none;">
+                <div class="loading">Loading...</div>
+            </div>
+        </div>
+
+        <style>
+        .ajax-character-picker {{
+            position: relative;
+            width: 100%;
+        }}
+
+        .ajax-search-input {{
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }}
+
+        .ajax-search-input:focus {{
+            border-color: #007bff;
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+        }}
+
+        .ajax-results {{
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }}
+
+        .ajax-result-item {{
+            padding: 8px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f0f0;
+        }}
+
+        .ajax-result-item:hover {{
+            background-color: #f8f9fa;
+        }}
+
+        .ajax-result-item.selected {{
+            background-color: #007bff;
+            color: white;
+        }}
+
+        .loading, .no-results {{
+            padding: 8px 12px;
+            color: #6c757d;
+            font-style: italic;
+        }}
+        </style>
+
+        <script>
+        (function() {{
+            function initAjaxCharacterPicker(container) {{
+                const fieldName = container.dataset.fieldName;
+                const searchUrl = container.dataset.searchUrl;
+                const hiddenInput = container.querySelector('input[type="hidden"]');
+                const searchInput = container.querySelector('.ajax-search-input');
+                const resultsDiv = container.querySelector('.ajax-results');
+
+                let searchTimeout;
+                let currentQuery = '';
+                let selectedIndex = -1;
+                let results = [];
+
+                function showResults() {{
+                    resultsDiv.style.display = 'block';
+                }}
+
+                function hideResults() {{
+                    setTimeout(() => {{
+                        resultsDiv.style.display = 'none';
+                    }}, 150);
+                }}
+
+                function updateSelection() {{
+                    const items = resultsDiv.querySelectorAll('.ajax-result-item');
+                    items.forEach((item, index) => {{
+                        if (index === selectedIndex) {{
+                            item.classList.add('selected');
+                        }} else {{
+                            item.classList.remove('selected');
+                        }}
+                    }});
+                }}
+
+                function selectResult(result) {{
+                    hiddenInput.value = result.id;
+                    searchInput.value = result.display;
+                    hideResults();
+                }}
+
+                function performSearch(query) {{
+                    if (query.length < 2) {{
+                        resultsDiv.innerHTML = '<div class="no-results">Type at least 2 characters to search</div>';
+                        showResults();
+                        return;
+                    }}
+
+                    resultsDiv.innerHTML = '<div class="loading">Searching...</div>';
+                    showResults();
+
+                    fetch(`${{searchUrl}}?q=${{encodeURIComponent(query)}}&limit=20`)
+                        .then(response => response.json())
+                        .then(data => {{
+                            results = data.results;
+                            selectedIndex = -1;
+
+                            if (results.length === 0) {{
+                                resultsDiv.innerHTML = '<div class="no-results">No characters found</div>';
+                            }} else {{
+                                const html = results.map(result =>
+                                    `<div class="ajax-result-item" data-id="${{result.id}}">${{result.display}}</div>`
+                                ).join('');
+                                resultsDiv.innerHTML = html;
+
+                                // Add click handlers
+                                resultsDiv.querySelectorAll('.ajax-result-item').forEach((item, index) => {{
+                                    item.addEventListener('click', () => {{
+                                        selectResult(results[index]);
+                                    }});
+                                }});
+                            }}
+                        }})
+                        .catch(error => {{
+                            console.error('Search error:', error);
+                            resultsDiv.innerHTML = '<div class="no-results">Search error occurred</div>';
+                        }});
+                }}
+
+                // Event handlers
+                searchInput.addEventListener('input', (e) => {{
+                    const query = e.target.value.trim();
+                    currentQuery = query;
+
+                    clearTimeout(searchTimeout);
+                    searchTimeout = setTimeout(() => {{
+                        if (currentQuery === query) {{
+                            performSearch(query);
+                        }}
+                    }}, 300); // Debounce search
+                }});
+
+                searchInput.addEventListener('focus', () => {{
+                    if (currentQuery.length >= 2) {{
+                        showResults();
+                    }}
+                }});
+
+                searchInput.addEventListener('blur', hideResults);
+
+                searchInput.addEventListener('keydown', (e) => {{
+                    const items = resultsDiv.querySelectorAll('.ajax-result-item');
+
+                    if (e.key === 'ArrowDown') {{
+                        e.preventDefault();
+                        selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
+                        updateSelection();
+                    }} else if (e.key === 'ArrowUp') {{
+                        e.preventDefault();
+                        selectedIndex = Math.max(selectedIndex - 1, -1);
+                        updateSelection();
+                    }} else if (e.key === 'Enter') {{
+                        e.preventDefault();
+                        if (selectedIndex >= 0 && selectedIndex < results.length) {{
+                            selectResult(results[selectedIndex]);
+                        }}
+                    }} else if (e.key === 'Escape') {{
+                        hideResults();
+                    }}
+                }});
+            }}
+
+            // Initialize when DOM is ready
+            document.addEventListener('DOMContentLoaded', function() {{
+                const container = document.querySelector('[data-field-name="{name}"]');
+                if (container) initAjaxCharacterPicker(container);
+            }});
+
+            // Also initialize immediately in case DOM is already ready
+            const container = document.querySelector('[data-field-name="{name}"]');
+            if (container) initAjaxCharacterPicker(container);
+        }})();
+        </script>
+        '''
+
+        return mark_safe(html)
+
+    def _get_display_name(self, value):
+        """Get display name for a selected value - minimal database query."""
+        if not value:
+            return ""
+
+        try:
+            from django.contrib.auth.models import User
+
+            if value.startswith('main_'):
+                char_id = value.replace('main_', '')
+                # Query only the specific main character
+                user = User.objects.select_related('profile__main_character').filter(
+                    profile__main_character__character_id=char_id,
+                    is_active=True
+                ).first()
+                if user and user.profile.main_character:
+                    char = user.profile.main_character
+                    return f"{char.character_name} (Main - {user.username})"
+
+            elif value.startswith('char_'):
+                char_id = value.replace('char_', '')
+                # Query only the specific character
+                user = User.objects.select_related('character_ownerships__character').filter(
+                    character_ownerships__character__character_id=char_id,
+                    is_active=True
+                ).first()
+                if user:
+                    ownership = user.character_ownerships.filter(character__character_id=char_id).first()
+                    if ownership:
+                        char = ownership.character
+                        return f"{char.character_name} (Alt - {user.username})"
+
+            elif value.startswith('user_'):
+                user_id = value.replace('user_', '')
+                user = User.objects.filter(id=user_id, is_active=True).first()
+                if user:
+                    return f"{user.username} (No characters)"
+
+        except Exception:
+            pass  # Fallback to empty display name
+
+        return ""
+
+
 class FormModelForm(forms.ModelForm):
     """Create / edit a form's metadata. Questions are managed on a separate page."""
 
@@ -574,7 +848,8 @@ class DynamicFillForm(forms.Form):
         self._character_names: dict[str, str] = {}
         self._character_choices = self._build_character_choices(user)
         self._user_names: dict[str, str] = {}
-        self._user_choices = self._build_user_choices()
+        # Performance optimization: Don't build user choices upfront for AJAX USER_PICKER
+        self._user_choices = None
 
         for question in form_obj.fields.all().prefetch_related("choices"):
             name = f"field_{question.pk}"
@@ -702,8 +977,8 @@ class DynamicFillForm(forms.Form):
                 choices=[("", "---------")] + self._character_choices, **common
             )
         if question.field_type == FieldType.USER_PICKER:
-            widget = SearchableCharacterWidget()
-            widget._choices = self._user_choices  # Pass choices to widget
+            # Use optimized AJAX widget instead of loading all users upfront
+            widget = AjaxSearchableCharacterWidget()
             return forms.CharField(
                 widget=widget, **common
             )

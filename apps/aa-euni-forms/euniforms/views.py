@@ -109,6 +109,11 @@ def index(request):
                 Q(title__icontains=search_query) | Q(description__icontains=search_query)
             )
 
+    # Performance optimization: Add response counts to avoid N+1 queries in template
+    from django.db.models import Count
+    managed_forms = managed_forms.annotate(response_count=Count('responses'))
+    reviewable_forms = reviewable_forms.annotate(response_count=Count('responses'))
+
     context = {
         "fillable_forms": fillable_forms,
         "submitted_ids": submitted_ids,
@@ -632,3 +637,81 @@ def response_delete(request, response_pk):
         "euniforms/manage/response_confirm_delete.html",
         {"response": response, "form_obj": response.form}
     )
+
+
+@login_required
+def search_characters_api(request):
+    """AJAX API endpoint for searching characters (optimized USER_PICKER)."""
+    from django.http import JsonResponse
+    from django.contrib.auth.models import User
+    from django.db.models import Q
+
+    query = request.GET.get('q', '').strip()
+    limit = min(int(request.GET.get('limit', 20)), 100)  # Max 100 results
+
+    results = []
+
+    if len(query) >= 2:  # Only search if query is at least 2 characters
+        # Search users and characters efficiently
+        users = User.objects.filter(
+            Q(username__icontains=query) |
+            Q(profile__main_character__character_name__icontains=query) |
+            Q(character_ownerships__character__character_name__icontains=query),
+            is_active=True
+        ).select_related('profile__main_character').prefetch_related(
+            'character_ownerships__character'
+        ).distinct()[:limit]
+
+        for user in users:
+            # Add main character first if available and matches query
+            if (hasattr(user, 'profile') and user.profile and
+                user.profile.main_character):
+                main_char = user.profile.main_character
+                if (query.lower() in main_char.character_name.lower() or
+                    query.lower() in user.username.lower()):
+                    results.append({
+                        'id': f"main_{main_char.character_id}",
+                        'name': main_char.character_name,
+                        'display': f"{main_char.character_name} (Main - {user.username})",
+                        'type': 'main'
+                    })
+
+            # Add matching alt characters
+            if hasattr(user, 'character_ownerships'):
+                for ownership in user.character_ownerships.all():
+                    character = ownership.character
+                    if query.lower() in character.character_name.lower():
+                        # Skip if this is already the main character
+                        if (hasattr(user, 'profile') and user.profile and
+                            user.profile.main_character and
+                            character.character_id == user.profile.main_character.character_id):
+                            continue
+
+                        results.append({
+                            'id': f"char_{character.character_id}",
+                            'name': character.character_name,
+                            'display': f"{character.character_name} (Alt - {user.username})",
+                            'type': 'alt'
+                        })
+
+            # Add user by username if no characters and username matches
+            if (not hasattr(user, 'character_ownerships') or
+                not user.character_ownerships.exists()):
+                if (not (hasattr(user, 'profile') and user.profile and
+                       user.profile.main_character) and
+                    query.lower() in user.username.lower()):
+                    results.append({
+                        'id': f"user_{user.id}",
+                        'name': user.username,
+                        'display': f"{user.username} (No characters)",
+                        'type': 'user'
+                    })
+
+    # Sort results by name and limit
+    results.sort(key=lambda x: x['name'].lower())
+
+    return JsonResponse({
+        'results': results[:limit],
+        'has_more': len(results) >= limit,
+        'query': query
+    })

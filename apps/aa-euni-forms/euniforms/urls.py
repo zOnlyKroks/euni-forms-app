@@ -13,6 +13,8 @@ urlpatterns = [
     path("", views.index, name="index"),
     path("form/<int:form_pk>/", views.form_fill, name="form_fill"),
     path("form/<int:form_pk>/submitted/", views.form_submitted, name="form_submitted"),
+    # AJAX endpoints
+    path("api/search-characters/", views.search_characters_api, name="search_characters_api"),
     # Form management
     path("manage/new/", views.form_create, name="form_create"),
     path("manage/<int:form_pk>/edit/", views.form_edit, name="form_edit"),

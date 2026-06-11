@@ -244,20 +244,38 @@ class Form(models.Model):
 
     def _get_user_state(self, user) -> str:
         """Get user's current state based on configured group-to-state mappings."""
+        # Simple request-level caching to avoid repeated queries for same user
+        cache_key = f"user_state_{user.id}"
+        if hasattr(self, '_user_state_cache') and cache_key in self._user_state_cache:
+            return self._user_state_cache[cache_key]
+
+        if not hasattr(self, '_user_state_cache'):
+            self._user_state_cache = {}
+
         user_groups = list(user.groups.all())
         if not user_groups:
-            return 'member' if user.is_active else 'inactive'
+            result = 'member' if user.is_active else 'inactive'
+            self._user_state_cache[cache_key] = result
+            return result
 
-        # Check if any of the user's groups have configured state mappings
+        # Performance optimization: Get all GroupStateMapping objects for user's groups in single query
+        user_group_ids = [group.id for group in user_groups]
+        mappings = GroupStateMapping.objects.filter(group_id__in=user_group_ids).select_related('group')
+
+        # Create a mapping dict for O(1) lookup
+        group_to_state = {mapping.group_id: mapping.state for mapping in mappings}
+
+        # Return state for first group that has a mapping (preserve original logic)
         for group in user_groups:
-            try:
-                mapping = GroupStateMapping.objects.get(group=group)
-                return mapping.state
-            except GroupStateMapping.DoesNotExist:
-                continue
+            if group.id in group_to_state:
+                result = group_to_state[group.id]
+                self._user_state_cache[cache_key] = result
+                return result
 
         # No mapping found - return default state
-        return 'member' if user.is_active else 'inactive'
+        result = 'member' if user.is_active else 'inactive'
+        self._user_state_cache[cache_key] = result
+        return result
 
     @classmethod
     def get_available_states(cls):
