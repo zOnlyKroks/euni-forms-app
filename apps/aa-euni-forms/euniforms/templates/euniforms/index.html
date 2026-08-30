@@ -3,12 +3,18 @@
 
 {% block euniforms_content %}
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h1 class="mb-0">{% translate "Forms" %}</h1>
-        {% if can_manage %}
-            <a href="{% url 'euniforms:form_create' %}" class="btn btn-primary">
-                <i class="fas fa-plus fa-fw"></i> {% translate "New form" %}
-            </a>
-        {% endif %}
+        <div class="alert alert-info mb-3">
+            Hello Laura, from your favourite banned person. Hope you enjoy the new version.
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h1 class="mb-0">{% translate "Forms" %}</h1>
+            {% if can_manage %}
+                <a href="{% url 'euniforms:form_create' %}" class="btn btn-primary">
+                    <i class="fas fa-plus fa-fw"></i> {% translate "New form" %}
+                </a>
+            {% endif %}
+        </div>
     </div>
 
     <!-- Search box -->
